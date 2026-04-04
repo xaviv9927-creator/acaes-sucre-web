@@ -1,0 +1,4 @@
+node_modules/
+acaes.db
+public/uploads/
+.env
