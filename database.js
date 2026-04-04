@@ -1,7 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'acaes.db');
+// NUEVA BASE DE DATOS (evita conflicto con la vieja)
+const dbPath = path.join(__dirname, 'acaes_nueva.db');
 const db = new sqlite3.Database(dbPath);
 
 // Tabla de publicaciones
@@ -29,7 +30,7 @@ db.run(`
   )
 `);
 
-// Tabla de configuración general
+// Tabla de configuración
 db.run(`
   CREATE TABLE IF NOT EXISTS configuracion (
     clave TEXT PRIMARY KEY,
@@ -37,7 +38,7 @@ db.run(`
   )
 `);
 
-// Tabla de usuarios registrados en la web
+// Tabla de usuarios registrados
 db.run(`
   CREATE TABLE IF NOT EXISTS usuarios_web (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,10 +61,11 @@ db.run(`
 
 // Insertar secciones por defecto
 db.get("SELECT id FROM secciones WHERE nombre = 'Ciencia'", (err, row) => {
-  if (!row) {
+  if (!row && !err) {
     db.run("INSERT INTO secciones (nombre, slug, orden) VALUES ('Ciencia', 'ciencia', 1)");
     db.run("INSERT INTO secciones (nombre, slug, orden) VALUES ('Investigación', 'investigacion', 2)");
     db.run("INSERT INTO secciones (nombre, slug, orden) VALUES ('Avistamiento', 'avistamiento', 3)");
+    console.log('✅ Secciones creadas');
   }
 });
 
@@ -77,8 +79,12 @@ const defaultConfigs = [
 
 defaultConfigs.forEach(([clave, valor]) => {
   db.get("SELECT valor FROM configuracion WHERE clave = ?", [clave], (err, row) => {
-    if (!row) db.run("INSERT INTO configuracion (clave, valor) VALUES (?, ?)", [clave, valor]);
+    if (!row && !err) {
+      db.run("INSERT INTO configuracion (clave, valor) VALUES (?, ?)", [clave, valor]);
+    }
   });
 });
+
+console.log('✅ Base de datos lista (acaes_nueva.db)');
 
 module.exports = db;
