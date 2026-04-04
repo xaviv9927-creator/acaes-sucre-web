@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin ACAES</title>
+    <style>
+        body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 800px; margin: auto; }
+        input, select, textarea { width: 100%; margin: 12px 0; background: #1a1f2a; border: 1px solid #00d4ff; color: white; padding: 12px; border-radius: 12px; }
+        button { background: #00d4ff; color: #0b0e14; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 40px; cursor: pointer; margin-top: 10px; }
+        .preview { background: #0f121c; border: 1px dashed #00d4ff; border-radius: 20px; padding: 15px; margin: 20px 0; }
+        .post-item, .usuario-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
+        .post-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; }
+        .seccion { background: #0f121c; border-radius: 20px; padding: 20px; margin-bottom: 30px; }
+        .error { color: #ff8888; background: #330000; padding: 10px; border-radius: 12px; margin-top: 10px; }
+        .exito { color: #88ff88; background: #003300; padding: 10px; border-radius: 12px; }
+        hr { border-color: #00d4ff33; margin: 20px 0; }
+        h3 { color: #00d4ff; margin-top: 0; }
+        .login-box { max-width: 400px; margin: 100px auto; }
+    </style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+    let logged = false;
+    let userAdmin = localStorage.getItem('acaes_admin_nombre') || 'Admin';
+
+    async function checkAuth() {
+        const res = await fetch('/api/admin/check');
+        const data = await res.json();
+        logged = data.logged;
+        if (logged) {
+            renderPanel();
+        } else {
+            renderLogin();
+        }
+    }
+
+    function renderLogin() {
+        document.getElementById('app').innerHTML = `
+            <div class="login-box">
+                <h2>🔐 Acceso Admin ACAES</h2>
+                <input type="password" id="pass" placeholder="Contraseña">
+                <button onclick="login()">Ingresar</button>
+                <div id="msg"></div>
+            </div>
+        `;
+    }
+
+    window.login = async function() {
+        const pass = document.getElementById('pass').value;
+        const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ password: pass })
+        });
+        if (res.ok) {
+            logged = true;
+            renderPanel();
+        } else {
+            document.getElementById('msg').innerHTML = '<div class="error">Contraseña incorrecta</div>';
+        }
+    };
+
+    window.logout = async function() {
+        await fetch('/api/admin/logout', { method: 'POST' });
+        logged = false;
+        renderLogin();
+    };
+
+    async function renderPanel() {
+        const html = `
+            <h2>🛸 Panel de Control ACAES</h2>
+            <button onclick="logout()" style="background:#ff4444; margin-bottom:20px;">🚪 Cerrar sesión</button>
+            
+            <div class="seccion">
+                <h3>📱 Configurar WhatsApp</h3>
+                <input type="text" id="whatsappNumero" placeholder="Número (ej: 584241234567)">
+                <button onclick="actualizarWhatsApp()">Actualizar</button>
+                <div id="msgWhatsapp"></div>
+            </div>
+
+            <div class="seccion">
+                <h3>🔑 Cambiar contraseña admin</h3>
+                <input type="password" id="nuevaPass" placeholder="Nueva contraseña (mínimo 4 caracteres)">
+                <button onclick="cambiarPass()">Cambiar contraseña</button>
+                <div id="msgPass"></div>
+            </div>
+
+            <div class="seccion">
+                <h3>📝 Nueva publicación</h3>
+                <form id="formPublicar" enctype="multipart/form-data">
+                    <input type="text" id="titulo" placeholder="Título *" required>
+                    <textarea id="contenido" rows="3" placeholder="Descripción"></textarea>
+                    <select id="tipo">
+                        <option value="Noticia">📰 Noticia</option>
+                        <option value="Investigacion">🔬 Investigación</option>
+                        <option value="Avistamiento">🔭 Avistamiento</option>
+                    </select>
+                    <input type="text" id="enlace_externo" placeholder="Enlace externo">
+                    <input type="file" id="archivo" accept="image/*,application/pdf">
+                    <button type="submit">🚀 PUBLICAR Y ENVIAR A TODOS</button>
+                </form>
+                <div class="preview"><strong>Vista previa:</strong><div id="previewContent"></div></div>
+            </div>
+
+            <div class="seccion">
+                <h3>📋 Publicaciones (${userAdmin})</h3>
+                <div id="listaPosts">Cargando...</div>
+            </div>
+
+            <div class="seccion">
+                <h3>👥 Usuarios registrados en web</h3>
+                <div id="listaUsuarios">Cargando...</div>
+            </div>
+
+            <div class="seccion">
+                <h3>🤖 Suscriptores de Telegram</h3>
+                <div id="listaSuscriptores">Cargando...</div>
+            </div>
+        `;
+        document.getElementById('app').innerHTML = html;
+        
+        cargarWhatsAppActual();
+        cargarListaPosts();
+        cargarUsuarios();
+        cargarSuscriptores();
+        actualizarVistaPrevia();
+        
+        document.getElementById('formPublicar').onsubmit = publicar;
+        document.getElementById('titulo').addEventListener('input', actualizarVistaPrevia);
+        document.getElementById('contenido').addEventListener('input', actualizarVistaPrevia);
+        document.getElementById('tipo').addEventListener('change', actualizarVistaPrevia);
+        document.getElementById('enlace_externo').addEventListener('input', actualizarVistaPrevia);
+        document.getElementById('archivo').addEventListener('change', actualizarVistaPrevia);
+    }
+
+    async function cargarWhatsAppActual() {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        if(document.getElementById('whatsappNumero')) {
+            document.getElementById('whatsappNumero').placeholder = cfg.whatsapp;
+        }
+    }
+
+    window.actualizarWhatsApp = async function() {
+        const numero = document.getElementById('whatsappNumero').value;
+        if(!numero.match(/^[0-9]{10,15}$/)) {
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>';
+            return;
+        }
+        const res = await fetch('/api/config/whatsapp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ numero })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ Actualizado</div>';
+        } else {
+            document.getElementById('msgWhatsapp').innerHTML = `<div class="error">${data.error}</div>`;
+        }
+    };
+
+    window.cambiarPass = async function() {
+        const nuevaPass = document.getElementById('nuevaPass').value;
+        if(nuevaPass.length < 4) {
+            document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>';
+            return;
+        }
+        const res = await fetch('/api/admin/cambiar_pass', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nuevaPass })
+        });
+        if(res.ok) {
+            document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>';
+            document.getElementById('nuevaPass').value = '';
+        } else {
+            document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
+        }
+    };
+
+    async function cargarListaPosts() {
+        const res = await fetch('/api/posts');
+        const posts = await res.json();
+        const div = document.getElementById('listaPosts');
+        if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
+        div.innerHTML = posts.map(post => `
+            <div class="post-item">
+                <strong>${escapeHtml(post.titulo)}</strong><br>
+                <small>${post.tipo} | ${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
+                <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
+            </div>
+        `).join('');
+    }
+
+    async function cargarUsuarios() {
+        const res = await fetch('/api/admin/usuarios');
+        const usuarios = await res.json();
+        const div = document.getElementById('listaUsuarios');
+        if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
+        div.innerHTML = usuarios.map(u => `
+            <div class="usuario-item">
+                <strong>${escapeHtml(u.nombre)}</strong><br>
+                📧 ${u.email || 'Sin email'} | 📅 ${new Date(u.fecha_registro).toLocaleString()}
+            </div>
+        `).join('');
+    }
+
+    async function cargarSuscriptores() {
+        const res = await fetch('/api/admin/suscriptores');
+        const subs = await res.json();
+        const div = document.getElementById('listaSuscriptores');
+        if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot @acaes_core_bot</p>'; return; }
+        div.innerHTML = subs.map(s => `
+            <div class="usuario-item">
+                🤖 ${s.nombre || 'Usuario'} ${s.username ? '@'+s.username : ''}<br>
+                📅 ${new Date(s.fecha_suscripcion).toLocaleString()}
+            </div>
+        `).join('');
+    }
+
+    window.eliminarPost = async function(id) {
+        if(!confirm('¿Eliminar publicación?')) return;
+        const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+        if(res.ok) {
+            cargarListaPosts();
+        }
+    };
+
+    function actualizarVistaPrevia() {
+        const titulo = document.getElementById('titulo')?.value || 'Sin título';
+        const tipo = document.getElementById('tipo')?.value || '';
+        const contenido = document.getElementById('contenido')?.value || '';
+        const enlace = document.getElementById('enlace_externo')?.value || '';
+        const archivo = document.getElementById('archivo')?.files[0];
+        let html = `<strong>${escapeHtml(titulo)}</strong> (${tipo})<br>`;
+        if(contenido) html += `<p>${escapeHtml(contenido.substring(0,100))}...</p>`;
+        if(enlace) html += `🔗 Enlace listo<br>`;
+        if(archivo) html += `📎 ${archivo.name}`;
+        const preview = document.getElementById('previewContent');
+        if(preview) preview.innerHTML = html;
+    }
+
+    async function publicar(e) {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('titulo', document.getElementById('titulo').value);
+        formData.append('contenido', document.getElementById('contenido').value);
+        formData.append('tipo', document.getElementById('tipo').value);
+        formData.append('enlace_externo', document.getElementById('enlace_externo').value);
+        formData.append('userAdmin', userAdmin);
+        const archivo = document.getElementById('archivo').files[0];
+        if(archivo) formData.append('archivo', archivo);
+        
+        const btn = document.querySelector('#formPublicar button');
+        btn.disabled = true;
+        btn.innerText = '🛰️ Enviando a todos...';
+        
+        try {
+            const res = await fetch('/api/publicar', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(res.ok) {
+                alert('✅ Publicado y enviado a todos los suscriptores de Telegram');
+                document.getElementById('formPublicar').reset();
+                actualizarVistaPrevia();
+                cargarListaPosts();
+            } else {
+                throw new Error(data.error);
+            }
+        } catch(err) {
+            alert('❌ Error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '🚀 PUBLICAR Y ENVIAR A TODOS';
+        }
+    }
+
+    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';}); }
+    
+    checkAuth();
+</script>
+</body>
+</html>
