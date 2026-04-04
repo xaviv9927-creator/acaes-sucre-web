@@ -2,30 +2,26 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ACAES Sucre - Oficial</title>
+    <title>ACAES Sucre 💫</title>
     <style>
         body { background: #0b0e14; color: white; font-family: sans-serif; margin: 0; }
-        .hamburguesa { font-size: 30px; cursor: pointer; padding: 15px; color: #00d4ff; }
-        .card { border: 1px solid #00d4ff; margin: 15px; padding: 10px; border-radius: 5px; }
-        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25d366; border-radius: 50%; padding: 15px; }
-        img { border: 1px solid #007bff; width: 100%; max-width: 500px; }
+        .header { padding: 20px; border-bottom: 1px solid #00d4ff; text-align: center; }
+        .hamburguesa { font-size: 30px; color: #00d4ff; cursor: pointer; padding: 10px; }
+        .post { border: 1px solid #00d4ff; border-radius: 8px; margin: 20px; padding: 15px; }
+        img { border: 0.5px solid #00d4ff; width: 100%; border-radius: 4px; }
+        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25d366; border-radius: 50%; padding: 15px; text-decoration: none; font-size: 24px; }
     </style>
 </head>
 <body>
-    <div class="hamburguesa" onclick="openMenu()">☰</div>
-    <center><h1>ACAES SUCRE 🌌</h1></center>
-    <div id="noticias">
-        </div>
-    
-    <a href="https://wa.me/TUNUMERO" class="ws-float">🟢</a>
-
+    <div class="hamburguesa">☰</div>
+    <div class="header"><h1>ACAES SUCRE 🔭</h1></div>
+    <div id="feed">
+        <div class="post"><h3>¡Bienvenidos a la nueva plataforma del estado Sucre! 🛰️</h3></div>
+    </div>
+    <a href="https://wa.me/584240000000" class="ws-float">🟢</a>
     <script>
-        // Lógica para el LocalStorage del nombre
-        let user = localStorage.getItem('usuario_acaes');
-        if(!user) {
-            user = prompt("Bienvenido a ACAES Sucre. Ingresa tu nombre:");
-            localStorage.setItem('usuario_acaes', user);
-        }
+        const user = localStorage.getItem('usuario_acaes') || prompt("Tu nombre:");
+        if(user) localStorage.setItem('usuario_acaes', user);
     </script>
 </body>
 </html>
