@@ -2,26 +2,89 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ACAES Sucre 💫</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACAES Sucre | Astronomía</title>
     <style>
-        body { background: #0b0e14; color: white; font-family: sans-serif; margin: 0; }
-        .header { padding: 20px; border-bottom: 1px solid #00d4ff; text-align: center; }
-        .hamburguesa { font-size: 30px; color: #00d4ff; cursor: pointer; padding: 10px; }
-        .post { border: 1px solid #00d4ff; border-radius: 8px; margin: 20px; padding: 15px; }
-        img { border: 0.5px solid #00d4ff; width: 100%; border-radius: 4px; }
-        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25d366; border-radius: 50%; padding: 15px; text-decoration: none; font-size: 24px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, sans-serif; }
+        .header { background: #0a0c10; padding: 20px; border-bottom: 2px solid #00d4ff; text-align: center; }
+        h1 { font-size: 1.8rem; }
+        .sub { color: #00d4ff; font-size: 0.8rem; }
+        .hamburguesa { font-size: 32px; cursor: pointer; padding: 15px; display: inline-block; color: #00d4ff; }
+        nav { background: #11141c; display: none; flex-direction: column; padding: 10px; }
+        nav a { color: white; text-decoration: none; padding: 12px; border-bottom: 1px solid #2a2f3a; }
+        .feed { padding: 15px; max-width: 800px; margin: auto; }
+        .post { background: #12161f; border: 1px solid #00d4ff; border-radius: 16px; margin-bottom: 25px; padding: 18px; }
+        .post h3 { color: #00d4ff; margin-bottom: 10px; }
+        .post img, .post video { max-width: 100%; border-radius: 12px; margin: 12px 0; }
+        .tipo { font-size: 0.7rem; background: #1e2a3a; display: inline-block; padding: 4px 12px; border-radius: 20px; }
+        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25D366; border-radius: 50%; padding: 14px; text-decoration: none; font-size: 28px; box-shadow: 0 2px 10px black; }
+        .loader { text-align: center; padding: 40px; color: #00d4ff; }
+        @media (max-width: 600px) { .post { padding: 12px; } h1 { font-size: 1.4rem; } }
     </style>
 </head>
 <body>
-    <div class="hamburguesa">☰</div>
-    <div class="header"><h1>ACAES SUCRE 🔭</h1></div>
-    <div id="feed">
-        <div class="post"><h3>¡Bienvenidos a la nueva plataforma del estado Sucre! 🛰️</h3></div>
-    </div>
-    <a href="https://wa.me/584240000000" class="ws-float">🟢</a>
-    <script>
-        const user = localStorage.getItem('usuario_acaes') || prompt("Tu nombre:");
-        if(user) localStorage.setItem('usuario_acaes', user);
-    </script>
+<div class="hamburguesa" onclick="toggleMenu()">☰</div>
+<nav id="menu">
+    <a href="/">Inicio</a>
+    <a href="/admin_acaes.html">Panel Admin</a>
+    <a href="https://t.me/acaeslacertanotifica">Canal TG</a>
+</nav>
+<div class="header">
+    <h1>🔭 ACAES SUCRE</h1>
+    <div class="sub">Nodo Astronómico Regional</div>
+</div>
+<div id="feed" class="feed"><div class="loader">Cargando...</div></div>
+<a id="wsLink" class="ws-float">💬</a>
+
+<script>
+    let whatsappNumero = '584240000000';
+
+    async function cargarConfig() {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        whatsappNumero = cfg.whatsapp;
+        document.getElementById('wsLink').href = `https://wa.me/${whatsappNumero}?text=Hola%20ACAES`;
+    }
+
+    async function cargarPosts() {
+        try {
+            const res = await fetch('/api/posts');
+            const posts = await res.json();
+            localStorage.setItem('feed_cache', JSON.stringify(posts));
+            renderizarPosts(posts);
+        } catch(e) {
+            const cache = localStorage.getItem('feed_cache');
+            if(cache) renderizarPosts(JSON.parse(cache));
+            else document.getElementById('feed').innerHTML = '<div class="post">⚠️ Sin conexión</div>';
+        }
+    }
+
+    function renderizarPosts(posts) {
+        const feedDiv = document.getElementById('feed');
+        if(!posts.length) {
+            feedDiv.innerHTML = '<div class="post">🌌 Sin publicaciones aún</div>';
+            return;
+        }
+        feedDiv.innerHTML = posts.map(post => `
+            <div class="post">
+                <span class="tipo">${post.tipo || 'Noticia'}</span>
+                <h3>${escapeHtml(post.titulo)}</h3>
+                ${post.contenido ? `<p>${escapeHtml(post.contenido)}</p>` : ''}
+                ${post.url_media && post.url_media.match(/\.(jpg|jpeg|png|webp)$/i) ? `<img src="${post.url_media}" loading="lazy" onclick="window.open(this.src)">` : ''}
+                ${post.url_media && post.url_media.match(/\.pdf$/i) ? `<a href="${post.url_media}" target="_blank">📄 Ver PDF</a>` : ''}
+                ${post.enlace_externo ? `<p>🔗 <a href="${post.enlace_externo}" target="_blank">Acceder</a></p>` : ''}
+                <small>📅 ${new Date(post.fecha_creacion).toLocaleString()}</small>
+            </div>
+        `).join('');
+    }
+
+    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';}); }
+    function toggleMenu() { const m = document.getElementById('menu'); m.style.display = m.style.display === 'flex' ? 'none' : 'flex'; }
+    
+    cargarConfig();
+    cargarPosts();
+    setInterval(cargarPosts, 60000);
+</script>
 </body>
-</html>
+    </html>
