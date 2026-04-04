@@ -4,6 +4,7 @@ const path = require('path');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
 const db = require('./database');
 const fs = require('fs');
 
@@ -11,11 +12,14 @@ const app = express();
 
 app.use(express.json());
 app.use(express.static('public'));
+
+// Sesión persistente en SQLite
 app.use(session({
+  store: new SQLiteStore({ db: 'sessions.db', table: 'sessions' }),
   secret: 'acaes_sucre_secret_2024',
   resave: false,
-  saveUninitialized: false,   // evitar crear sesiones vacías
-  cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, secure: false }
+  saveUninitialized: false,
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true, secure: false }
 }));
 
 // Carpeta de uploads
@@ -39,7 +43,7 @@ const upload = multer({
   }
 });
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use('/api/', limiter);
 
 // Funciones de configuración
@@ -214,7 +218,7 @@ app.post('/api/admin/login', (req, res) => {
     const adminPass = row ? row.valor : '12345678';
     if (password === adminPass) {
       req.session.admin_logged = true;
-      req.session.save(); // asegurar persistencia
+      req.session.save();
       const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
       notificarAdmin(`🔐 *INICIO DE SESIÓN ADMIN*\n\n🌐 IP: ${ip}\n📅 ${new Date().toLocaleString()}`);
       res.json({ success: true });
@@ -313,7 +317,6 @@ app.delete('/api/admin/categorias/:id', requireAdmin, (req, res) => {
   });
 });
 
-// Endpoint para crear subcategoría sobre la marcha (desde el panel de publicación)
 app.post('/api/admin/subcategoria', requireAdmin, (req, res) => {
   const { nombre, slug, padre_id } = req.body;
   if (!nombre || !slug || !padre_id) return res.status(400).json({ error: 'Datos incompletos' });
@@ -413,7 +416,7 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
   }
 });
 
-// Rutas HTML
+// ========== RUTAS HTML ==========
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/index.html', (req, res) => res.redirect('/'));
