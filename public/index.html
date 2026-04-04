@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ACAES Sucre - Oficial</title>
+    <style>
+        body { background: #0b0e14; color: white; font-family: sans-serif; margin: 0; }
+        .hamburguesa { font-size: 30px; cursor: pointer; padding: 15px; color: #00d4ff; }
+        .card { border: 1px solid #00d4ff; margin: 15px; padding: 10px; border-radius: 5px; }
+        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25d366; border-radius: 50%; padding: 15px; }
+        img { border: 1px solid #007bff; width: 100%; max-width: 500px; }
+    </style>
+</head>
+<body>
+    <div class="hamburguesa" onclick="openMenu()">☰</div>
+    <center><h1>ACAES SUCRE 🌌</h1></center>
+    <div id="noticias">
+        </div>
+    
+    <a href="https://wa.me/TUNUMERO" class="ws-float">🟢</a>
+
+    <script>
+        // Lógica para el LocalStorage del nombre
+        let user = localStorage.getItem('usuario_acaes');
+        if(!user) {
+            user = prompt("Bienvenido a ACAES Sucre. Ingresa tu nombre:");
+            localStorage.setItem('usuario_acaes', user);
+        }
+    </script>
+</body>
+</html>
