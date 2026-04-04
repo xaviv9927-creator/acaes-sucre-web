@@ -31,8 +31,9 @@
         .credito { text-align: center; font-size: 0.7rem; color: #555; margin-top: 10px; margin-bottom: 20px; }
         .modal-editar { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 2000; }
         .modal-editar-content { background: #1a1f2a; padding: 25px; border-radius: 20px; width: 90%; max-width: 500px; border: 1px solid #00d4ff; max-height: 90%; overflow-y: auto; }
-        .flex-row { display: flex; gap: 10px; align-items: center; }
+        .flex-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .flex-row button { width: auto; margin-top: 0; padding: 8px 16px; }
+        @media (max-width: 600px) { body { padding: 12px; } .flex-row { flex-direction: column; align-items: stretch; } .flex-row button { width: 100%; } }
     </style>
     <script>
         let deferredPrompt;
@@ -58,7 +59,9 @@
 <script>
     let logged = false;
     let userAdmin = localStorage.getItem('acaes_admin_nombre') || 'Admin';
+    let categoriasArbol = [];
 
+    // ---------- AUTH ----------
     async function checkAuth() {
         try {
             const res = await fetch('/api/admin/check');
@@ -122,75 +125,62 @@
         renderLogin();
     };
 
-    // Categorías
-    let categoriasArbol = [];
-
-    async function cargarCategoriasSelect(selectId, valorSeleccionado = null) {
+    // ---------- CATEGORÍAS (selectores) ----------
+    async function cargarCategoriasPrincipales() {
         try {
             const res = await fetch('/api/categorias');
-            categoriasArbol = await res.json();
-            const select = document.getElementById(selectId);
-            if (!select) return;
-            select.innerHTML = '<option value="">Selecciona categoría</option>';
-            function agregarOpciones(cats, nivel = 0) {
-                cats.forEach(cat => {
-                    const prefix = '—'.repeat(nivel);
-                    select.innerHTML += `<option value="${cat.id}" data-es-padre="${cat.hijos && cat.hijos.length ? 'true' : 'false'}">${prefix} ${cat.nombre}</option>`;
-                    if (cat.hijos && cat.hijos.length) agregarOpciones(cat.hijos, nivel + 1);
+            const todas = await res.json();
+            categoriasArbol = todas;
+            const selectCat = document.getElementById('categoriaSelect');
+            if (!selectCat) return;
+            selectCat.innerHTML = '<option value="">-- Selecciona categoría --</option>';
+            const raices = todas.filter(c => c.padre_id === 0);
+            raices.forEach(cat => {
+                selectCat.innerHTML += `<option value="${cat.id}">${escapeHtml(cat.nombre)}</option>`;
+            });
+            selectCat.addEventListener('change', () => {
+                const catId = selectCat.value;
+                const subSelect = document.getElementById('subcategoriaSelect');
+                subSelect.innerHTML = '<option value="">-- Ninguna --</option>';
+                if (!catId) return;
+                const hijos = todas.filter(c => c.padre_id == catId);
+                hijos.forEach(h => {
+                    subSelect.innerHTML += `<option value="${h.id}">${escapeHtml(h.nombre)}</option>`;
                 });
-            }
-            agregarOpciones(categoriasArbol);
-            if (valorSeleccionado) select.value = valorSeleccionado;
-            // Si la categoría seleccionada tiene hijos, mostrar subcategorías
-            cargarSubcategorias(selectId);
-        } catch(e) {}
-    }
-
-    async function cargarSubcategorias(selectId) {
-        const select = document.getElementById(selectId);
-        const catId = select.value;
-        const subSelect = document.getElementById('subcategoriaSelect');
-        if (!subSelect) return;
-        subSelect.innerHTML = '<option value="">Sin subcategoría (publicar en categoría padre)</option>';
-        if (!catId) return;
-        // Buscar hijos de esa categoría
-        function buscarHijos(cats, padreId) {
-            for (let cat of cats) {
-                if (cat.id == padreId) return cat.hijos || [];
-                if (cat.hijos) {
-                    const found = buscarHijos(cat.hijos, padreId);
-                    if (found) return found;
-                }
-            }
-            return [];
-        }
-        const hijos = buscarHijos(categoriasArbol, parseInt(catId));
-        hijos.forEach(h => {
-            subSelect.innerHTML += `<option value="${h.id}">${h.nombre}</option>`;
-        });
+            });
+        } catch(e) { console.error(e); }
     }
 
     // Crear subcategoría rápida
-    window.mostrarCrearSubcategoria = function() {
+    window.crearSubcategoria = async function() {
         const catId = document.getElementById('categoriaSelect').value;
-        if (!catId) { alert('Primero selecciona una categoría padre'); return; }
+        if (!catId) { alert('Primero selecciona una categoría principal'); return; }
         const nombre = prompt('Nombre de la nueva subcategoría:');
         if (!nombre) return;
         const slug = prompt('Slug (identificador único, sin espacios):', nombre.toLowerCase().replace(/ /g, '-'));
         if (!slug) return;
-        fetch('/api/admin/subcategoria', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre, slug, padre_id: catId })
-        }).then(res => res.json()).then(data => {
-            if (data.success) {
-                alert('Subcategoría creada');
-                cargarCategoriasSelect('categoriaSelect');
-            } else alert('Error: ' + data.error);
-        }).catch(e => alert('Error de conexión'));
+        try {
+            const res = await fetch('/api/admin/subcategoria', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, slug, padre_id: catId })
+            });
+            if (res.ok) {
+                alert('✅ Subcategoría creada. Refrescando...');
+                await cargarCategoriasPrincipales();
+                // disparar change para actualizar subcategorías
+                const selectCat = document.getElementById('categoriaSelect');
+                selectCat.dispatchEvent(new Event('change'));
+                // también recargar lista de categorías en pestaña de gestión
+                cargarListaCategorias();
+            } else {
+                const err = await res.json();
+                alert('Error: ' + err.error);
+            }
+        } catch(e) { alert('Error de conexión'); }
     };
 
-    // El resto (gestión de categorías, posts, etc.) similar a antes pero adaptado
+    // ---------- GESTIÓN DE CATEGORÍAS (listado y formulario) ----------
     async function cargarListaCategorias() {
         try {
             const res = await fetch('/api/categorias');
@@ -225,7 +215,7 @@
         selectPadre.innerHTML = '<option value="0">Ninguna (raíz)</option>';
         function agregarPadres(cats, nivel = 0) {
             cats.forEach(cat => {
-                selectPadre.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${cat.nombre}</option>`;
+                selectPadre.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${escapeHtml(cat.nombre)}</option>`;
                 if (cat.hijos && cat.hijos.length) agregarPadres(cat.hijos, nivel + 1);
             });
         }
@@ -249,15 +239,14 @@
             });
             if (res.ok) {
                 document.getElementById('formCategoria').style.display = 'none';
-                cargarListaCategorias();
-                cargarCategoriasSelect('categoriaSelect');
-                cargarCategoriasSelectEdicion();
+                await cargarListaCategorias();
+                await cargarCategoriasPrincipales();
             } else alert('Error');
-        } catch(e) { alert('Error'); }
+        } catch(e) { alert('Error de conexión'); }
     };
 
     window.editarCategoria = function(id, nombre, slug, padre_id) {
-        cargarCategoriasSelect('catPadreSelect');
+        cargarCategoriasPrincipales(); // refrescar árbol
         setTimeout(() => {
             document.getElementById('formCategoria').style.display = 'block';
             document.getElementById('catId').value = id;
@@ -269,40 +258,53 @@
     };
 
     window.eliminarCategoria = async function(id) {
-        if (!confirm('¿Eliminar categoría y subcategorías?')) return;
+        if (!confirm('¿Eliminar categoría y todas sus subcategorías?')) return;
         try {
             const res = await fetch(`/api/admin/categorias/${id}`, { method: 'DELETE' });
             if (res.ok) {
-                cargarListaCategorias();
-                cargarCategoriasSelect('categoriaSelect');
-                cargarCategoriasSelectEdicion();
+                await cargarListaCategorias();
+                await cargarCategoriasPrincipales();
             } else alert('Error');
         } catch(e) { alert('Error'); }
     };
 
-    // Edición de publicaciones
-    async function cargarCategoriasSelectEdicion() {
+    // ---------- PUBLICACIONES (listado, editar, eliminar) ----------
+    async function cargarListaPosts() {
         try {
-            const res = await fetch('/api/categorias');
-            const cats = await res.json();
-            const select = document.getElementById('editCategoria');
-            if (!select) return;
-            select.innerHTML = '<option value="">Sin categoría</option>';
-            function addOpts(lista, nivel = 0) {
-                lista.forEach(cat => {
-                    select.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${cat.nombre}</option>`;
-                    if (cat.hijos) addOpts(cat.hijos, nivel + 1);
-                });
-            }
-            addOpts(cats);
+            const res = await fetch('/api/posts');
+            const posts = await res.json();
+            const div = document.getElementById('listaPosts');
+            if (!div) return;
+            if (!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
+            div.innerHTML = posts.map(post => `
+                <div class="post-item">
+                    <strong>${escapeHtml(post.titulo)}</strong><br>
+                    <small>${post.tipo} | ${post.categoria_nombre ? post.categoria_nombre+' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
+                    <button class="editar" onclick="editarPost(${post.id})">✏️ Editar</button>
+                    <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
+                </div>
+            `).join('');
         } catch(e) {}
     }
 
+    window.eliminarPost = async function(id) {
+        if (!confirm('¿Eliminar publicación?')) return;
+        try {
+            const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                alert('Publicación eliminada');
+                cargarListaPosts();
+            } else alert('Error');
+        } catch(e) { alert('Error'); }
+    };
+
     window.editarPost = async function(id) {
         try {
-            const res = await fetch(`/api/posts/${id}`);
-            const post = await res.json();
-            await cargarCategoriasSelectEdicion();
+            const resPost = await fetch(`/api/posts/${id}`);
+            const post = await resPost.json();
+            // cargar categorías para el select
+            const resCats = await fetch('/api/categorias');
+            const todasCats = await resCats.json();
             const modal = document.createElement('div');
             modal.className = 'modal-editar';
             modal.innerHTML = `
@@ -319,13 +321,19 @@
                     <input type="text" id="editEnlace" value="${escapeHtml(post.enlace_externo || '')}" placeholder="Enlace externo">
                     <input type="file" id="editArchivo" accept="image/*,application/pdf">
                     <p style="font-size:0.7rem;">Si subes archivo, reemplazará al anterior</p>
-                    <button onclick="guardarEdicion(${id})">💾 Guardar</button>
+                    <button onclick="guardarEdicion(${id})">💾 Guardar cambios</button>
                     <button onclick="this.closest('.modal-editar').remove()" style="background:#ff4444;">Cancelar</button>
                 </div>
             `;
             document.body.appendChild(modal);
             const selectCat = document.getElementById('editCategoria');
-            if (post.categoria_id) selectCat.value = post.categoria_id;
+            function llenarSelectCats(cats, nivel = 0) {
+                cats.forEach(cat => {
+                    selectCat.innerHTML += `<option value="${cat.id}" ${post.categoria_id == cat.id ? 'selected' : ''}>${'—'.repeat(nivel)} ${escapeHtml(cat.nombre)}</option>`;
+                    if (cat.hijos) llenarSelectCats(cat.hijos, nivel + 1);
+                });
+            }
+            llenarSelectCats(todasCats);
         } catch(e) { alert('Error al cargar publicación'); }
     };
 
@@ -338,15 +346,84 @@
         formData.append('enlace_externo', document.getElementById('editEnlace').value);
         formData.append('userAdmin', userAdmin);
         const archivo = document.getElementById('editArchivo').files[0];
-        if(archivo) formData.append('archivo', archivo);
+        if (archivo) formData.append('archivo', archivo);
         try {
             const res = await fetch(`/api/posts/${id}`, { method: 'PUT', body: formData });
-            if(res.ok) { alert('✅ Actualizada'); document.querySelector('.modal-editar')?.remove(); cargarListaPosts(); }
-            else alert('Error');
+            if (res.ok) {
+                alert('✅ Publicación actualizada');
+                document.querySelector('.modal-editar')?.remove();
+                cargarListaPosts();
+            } else alert('Error');
         } catch(e) { alert('Error'); }
     };
 
-    // Render principal
+    // ---------- OTROS (WhatsApp, Bot, Usuarios, Suscriptores) ----------
+    async function cargarUsuarios() {
+        const res = await fetch('/api/admin/usuarios');
+        const usuarios = await res.json();
+        const div = document.getElementById('listaUsuarios');
+        if (!div) return;
+        if (!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
+        div.innerHTML = usuarios.map(u => `<div class="usuario-item"><strong>${escapeHtml(u.nombre)}</strong><br>📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip||'desconocida'}</div>`).join('');
+    }
+
+    async function cargarSuscriptores() {
+        const res = await fetch('/api/admin/suscriptores');
+        const subs = await res.json();
+        const div = document.getElementById('listaSuscriptores');
+        if (!div) return;
+        if (!subs.length) { div.innerHTML = '<p>Sin suscriptores</p>'; return; }
+        div.innerHTML = subs.map(s => `<div class="usuario-item">🤖 ${s.nombre||'Usuario'} ${s.username?'@'+s.username:''}<br>📅 ${new Date(s.fecha_suscripcion).toLocaleString()}</div>`).join('');
+    }
+
+    async function cargarWhatsAppActual() {
+        try {
+            const res = await fetch('/api/config');
+            const cfg = await res.json();
+            if(document.getElementById('whatsappNumero')) document.getElementById('whatsappNumero').value = cfg.whatsapp;
+        } catch(e) {}
+    }
+
+    window.actualizarWhatsApp = async function() {
+        const numero = document.getElementById('whatsappNumero').value;
+        if(!numero.match(/^[0-9]{10,15}$/)) { document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>'; return; }
+        const res = await fetch('/api/config/whatsapp', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ numero }) });
+        if(res.ok) document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ Actualizado</div>';
+        else document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
+    };
+
+    window.guardarConfigBot = async function() {
+        const token = document.getElementById('botToken').value.trim();
+        const adminId = document.getElementById('adminId').value.trim();
+        if(!token) { document.getElementById('msgBot').innerHTML = '<div class="error">Token requerido</div>'; return; }
+        let res1 = await fetch('/api/admin/bot_token', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token }) });
+        let res2 = { ok: true };
+        if (adminId) res2 = await fetch('/api/admin/admin_id', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: adminId }) });
+        if(res1.ok && res2.ok) { window.botTokenActual = token; window.adminIdActual = adminId; document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Guardado</div>'; }
+        else document.getElementById('msgBot').innerHTML = '<div class="error">Error</div>';
+    };
+
+    window.configurarWebhook = async function() {
+        const token = document.getElementById('botToken').value.trim();
+        if(!token) { document.getElementById('msgWebhook').innerHTML = '<div class="error">Primero guarda token</div>'; return; }
+        const urlActual = window.location.origin;
+        try {
+            const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${urlActual}/webhook`);
+            const data = await res.json();
+            if(data.ok) document.getElementById('msgWebhook').innerHTML = '<div class="exito">✅ Webhook configurado</div>';
+            else document.getElementById('msgWebhook').innerHTML = `<div class="error">Error: ${data.description}</div>`;
+        } catch(e) { document.getElementById('msgWebhook').innerHTML = '<div class="error">Error de conexión</div>'; }
+    };
+
+    window.cambiarPass = async function() {
+        const nuevaPass = document.getElementById('nuevaPass').value;
+        if(nuevaPass.length<4) { document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>'; return; }
+        const res = await fetch('/api/admin/cambiar_pass', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nuevaPass }) });
+        if(res.ok) { document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>'; document.getElementById('nuevaPass').value=''; }
+        else document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
+    };
+
+    // ---------- RENDER PRINCIPAL ----------
     async function renderPanel() {
         const html = `
             <h2>🛸 Panel de Control ACAES</h2>
@@ -371,12 +448,18 @@
                             <option value="Investigacion">🔬 Investigación</option>
                             <option value="Avistamiento">🔭 Avistamiento</option>
                         </select>
+
                         <label>Categoría principal:</label>
-                        <select id="categoriaSelect" onchange="cargarSubcategorias('categoriaSelect')"></select>
+                        <select id="categoriaSelect" required></select>
+
+                        <label>Subcategoría (opcional):</label>
+                        <select id="subcategoriaSelect">
+                            <option value="">-- Ninguna --</option>
+                        </select>
                         <div class="flex-row">
-                            <select id="subcategoriaSelect" style="flex:1"></select>
-                            <button type="button" onclick="mostrarCrearSubcategoria()" style="width:auto; margin-top:0;">➕ Crear subcategoría</button>
+                            <button type="button" id="btnNuevaSubcategoria" style="background:#ffaa00; margin-top:0;">➕ Crear nueva subcategoría</button>
                         </div>
+
                         <input type="text" id="enlace_externo" placeholder="Enlace externo">
                         <input type="file" id="archivo" accept="image/*,application/pdf">
                         <button type="submit">🚀 PUBLICAR</button>
@@ -401,14 +484,15 @@
                     </div>
                 </div>
             </div>
-            <div id="tab-bot" class="tab-content"><div class="seccion"><h3>🤖 Bot</h3><label>Token:</label><input type="text" id="botToken"><label>ID Admin:</label><input type="text" id="adminId"><button onclick="guardarConfigBot()">Guardar</button><div id="msgBot"></div><hr><button onclick="configurarWebhook()">Configurar Webhook</button><div id="msgWebhook"></div></div></div>
-            <div id="tab-config" class="tab-content"><div class="seccion"><h3>⚙️ Configuración</h3><label>WhatsApp:</label><input type="text" id="whatsappNumero"><button onclick="actualizarWhatsApp()">Actualizar</button><div id="msgWhatsapp"></div><hr><label>Nueva contraseña:</label><input type="password" id="nuevaPass"><button onclick="cambiarPass()">Cambiar</button><div id="msgPass"></div></div></div>
-            <div id="tab-usuarios" class="tab-content"><div class="seccion"><h3>👥 Usuarios</h3><div id="listaUsuarios"></div></div></div>
-            <div id="tab-suscriptores" class="tab-content"><div class="seccion"><h3>📡 Suscriptores</h3><div id="listaSuscriptores"></div></div></div>
-            <div id="tab-posts" class="tab-content"><div class="seccion"><h3>📋 Publicaciones</h3><div id="listaPosts"></div></div></div>
+            <div id="tab-bot" class="tab-content"><div class="seccion"><h3>🤖 Bot Telegram</h3><label>Token:</label><input type="text" id="botToken" value="${window.botTokenActual || ''}"><label>ID Admin:</label><input type="text" id="adminId" value="${window.adminIdActual || ''}"><button onclick="guardarConfigBot()">Guardar</button><div id="msgBot"></div><hr><button onclick="configurarWebhook()">Configurar Webhook</button><div id="msgWebhook"></div></div></div>
+            <div id="tab-config" class="tab-content"><div class="seccion"><h3>⚙️ Configuración General</h3><label>WhatsApp:</label><input type="text" id="whatsappNumero"><button onclick="actualizarWhatsApp()">Actualizar WhatsApp</button><div id="msgWhatsapp"></div><hr><label>Nueva contraseña admin:</label><input type="password" id="nuevaPass"><button onclick="cambiarPass()">Cambiar contraseña</button><div id="msgPass"></div></div></div>
+            <div id="tab-usuarios" class="tab-content"><div class="seccion"><h3>👥 Usuarios registrados</h3><div id="listaUsuarios">Cargando...</div></div></div>
+            <div id="tab-suscriptores" class="tab-content"><div class="seccion"><h3>📡 Suscriptores de Telegram</h3><div id="listaSuscriptores">Cargando...</div></div></div>
+            <div id="tab-posts" class="tab-content"><div class="seccion"><h3>📋 Publicaciones</h3><div id="listaPosts">Cargando...</div></div></div>
         `;
         document.getElementById('app').innerHTML = html;
-        await cargarCategoriasSelect('categoriaSelect');
+
+        await cargarCategoriasPrincipales();
         await cargarListaCategorias();
         await cargarListaPosts();
         await cargarUsuarios();
@@ -416,6 +500,7 @@
         await cargarWhatsAppActual();
         if (window.botTokenActual) document.getElementById('botToken').value = window.botTokenActual;
         if (window.adminIdActual) document.getElementById('adminId').value = window.adminIdActual;
+
         actualizarVistaPrevia();
         document.getElementById('formPublicar').onsubmit = publicar;
         document.getElementById('titulo').addEventListener('input', actualizarVistaPrevia);
@@ -423,90 +508,16 @@
         document.getElementById('tipo').addEventListener('change', actualizarVistaPrevia);
         document.getElementById('enlace_externo').addEventListener('input', actualizarVistaPrevia);
         document.getElementById('archivo').addEventListener('change', actualizarVistaPrevia);
+        document.getElementById('btnNuevaSubcategoria').onclick = () => crearSubcategoria();
     }
 
     window.mostrarTab = function(tab) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('activo'));
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('activo'));
         document.getElementById(`tab-${tab}`).classList.add('activo');
-        event.target.classList.add('activo');
+        if(event && event.target) event.target.classList.add('activo');
     };
 
-    async function cargarWhatsAppActual() {
-        try {
-            const res = await fetch('/api/config');
-            const cfg = await res.json();
-            if(document.getElementById('whatsappNumero')) document.getElementById('whatsappNumero').value = cfg.whatsapp;
-        } catch(e) {}
-    }
-    window.actualizarWhatsApp = async function() {
-        const numero = document.getElementById('whatsappNumero').value;
-        if(!numero.match(/^[0-9]{10,15}$/)) { document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>'; return; }
-        const res = await fetch('/api/config/whatsapp', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ numero }) });
-        if(res.ok) document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ Actualizado</div>';
-        else document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
-    };
-    window.guardarConfigBot = async function() {
-        const token = document.getElementById('botToken').value.trim();
-        const adminId = document.getElementById('adminId').value.trim();
-        if(!token) { document.getElementById('msgBot').innerHTML = '<div class="error">Token requerido</div>'; return; }
-        let res1 = await fetch('/api/admin/bot_token', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token }) });
-        let res2 = { ok: true };
-        if (adminId) res2 = await fetch('/api/admin/admin_id', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: adminId }) });
-        if(res1.ok && res2.ok) { window.botTokenActual = token; window.adminIdActual = adminId; document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Guardado</div>'; }
-        else document.getElementById('msgBot').innerHTML = '<div class="error">Error</div>';
-    };
-    window.configurarWebhook = async function() {
-        const token = document.getElementById('botToken').value.trim();
-        if(!token) { document.getElementById('msgWebhook').innerHTML = '<div class="error">Primero guarda token</div>'; return; }
-        const urlActual = window.location.origin;
-        try {
-            const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${urlActual}/webhook`);
-            const data = await res.json();
-            if(data.ok) document.getElementById('msgWebhook').innerHTML = '<div class="exito">✅ Webhook configurado</div>';
-            else document.getElementById('msgWebhook').innerHTML = `<div class="error">Error: ${data.description}</div>`;
-        } catch(e) { document.getElementById('msgWebhook').innerHTML = '<div class="error">Error de conexión</div>'; }
-    };
-    window.cambiarPass = async function() {
-        const nuevaPass = document.getElementById('nuevaPass').value;
-        if(nuevaPass.length<4) { document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>'; return; }
-        const res = await fetch('/api/admin/cambiar_pass', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nuevaPass }) });
-        if(res.ok) { document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>'; document.getElementById('nuevaPass').value=''; }
-        else document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
-    };
-    async function cargarListaPosts() {
-        const res = await fetch('/api/posts');
-        const posts = await res.json();
-        const div = document.getElementById('listaPosts');
-        if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
-        div.innerHTML = posts.map(post => `
-            <div class="post-item">
-                <strong>${escapeHtml(post.titulo)}</strong><br>
-                <small>${post.tipo} | ${post.categoria_nombre ? post.categoria_nombre+' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
-                <button class="editar" onclick="editarPost(${post.id})">✏️ Editar</button>
-                <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
-            </div>
-        `).join('');
-    }
-    async function cargarUsuarios() {
-        const res = await fetch('/api/admin/usuarios');
-        const usuarios = await res.json();
-        const div = document.getElementById('listaUsuarios');
-        if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
-        div.innerHTML = usuarios.map(u => `<div class="usuario-item"><strong>${escapeHtml(u.nombre)}</strong><br>📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip||'desconocida'}</div>`).join('');
-    }
-    async function cargarSuscriptores() {
-        const res = await fetch('/api/admin/suscriptores');
-        const subs = await res.json();
-        const div = document.getElementById('listaSuscriptores');
-        if(!subs.length) { div.innerHTML = '<p>Sin suscriptores</p>'; return; }
-        div.innerHTML = subs.map(s => `<div class="usuario-item">🤖 ${s.nombre||'Usuario'} ${s.username?'@'+s.username:''}<br>📅 ${new Date(s.fecha_suscripcion).toLocaleString()}</div>`).join('');
-    }
-    window.eliminarPost = async function(id) {
-        if(!confirm('¿Eliminar publicación?')) return;
-        const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
-        if(res.ok) { alert('Eliminada'); cargarListaPosts(); }
-    };
     function actualizarVistaPrevia() {
         const titulo = document.getElementById('titulo')?.value || 'Sin título';
         const tipo = document.getElementById('tipo')?.value || '';
@@ -520,12 +531,13 @@
         const preview = document.getElementById('previewContent');
         if(preview) preview.innerHTML = html;
     }
+
     async function publicar(e) {
         e.preventDefault();
         const categoriaId = document.getElementById('categoriaSelect').value;
         const subcategoriaId = document.getElementById('subcategoriaSelect').value;
         const categoriaFinal = subcategoriaId || categoriaId;
-        if (!categoriaFinal) { alert('Debes seleccionar una categoría o subcategoría'); return; }
+        if (!categoriaFinal) { alert('Debes seleccionar al menos una categoría principal'); return; }
         const formData = new FormData();
         formData.append('titulo', document.getElementById('titulo').value);
         formData.append('contenido', document.getElementById('contenido').value);
@@ -544,7 +556,9 @@
         } catch(e) { alert('Error'); }
         finally { btn.disabled = false; btn.innerText = '🚀 PUBLICAR'; }
     }
+
     function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m=> m==='&'?'&amp;': m==='<'?'&lt;':'&gt;'); }
+
     checkAuth();
 </script>
 </body>
