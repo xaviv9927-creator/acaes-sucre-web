@@ -4,7 +4,7 @@ const path = require('path');
 const dbPath = path.join(__dirname, 'acaes_nueva.db');
 const db = new sqlite3.Database(dbPath);
 
-// Tabla de publicaciones (con categoria_id)
+// Tabla de publicaciones
 db.run(`
   CREATE TABLE IF NOT EXISTS publicaciones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +39,7 @@ db.run(`
   )
 `);
 
-// Tabla de usuarios registrados
+// Tabla de usuarios web
 db.run(`
   CREATE TABLE IF NOT EXISTS usuarios_web (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +49,7 @@ db.run(`
   )
 `);
 
-// Tabla de suscriptores de Telegram
+// Tabla de suscriptores Telegram
 db.run(`
   CREATE TABLE IF NOT EXISTS suscriptores_telegram (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,29 +60,47 @@ db.run(`
   )
 `);
 
-// Insertar categorías por defecto (estructura tipo Hubble/NASA)
-const defaultCategorias = [
+// Insertar categorías predefinidas (las que quieras que aparezcan arriba)
+const categoriasPredefinidas = [
   { nombre: 'Inicio', slug: 'inicio', padre: 0, orden: 1 },
   { nombre: 'Noticias', slug: 'noticias', padre: 0, orden: 2 },
   { nombre: 'Imágenes', slug: 'imagenes', padre: 0, orden: 3 },
-  { nombre: 'Mejores imágenes', slug: 'mejores-imagenes', padre: 3, orden: 1 },
-  { nombre: 'Imagen del mes', slug: 'imagen-mes', padre: 3, orden: 2 },
-  { nombre: 'Foto de la semana', slug: 'foto-semana', padre: 3, orden: 3 },
   { nombre: 'Vídeos', slug: 'videos', padre: 0, orden: 4 },
-  { nombre: 'Boletines informativos', slug: 'boletines', padre: 0, orden: 5 },
+  { nombre: 'Boletines', slug: 'boletines', padre: 0, orden: 5 },
   { nombre: 'Iniciativas', slug: 'iniciativas', padre: 0, orden: 6 },
   { nombre: 'Acerca de', slug: 'acerca', padre: 0, orden: 7 },
   { nombre: 'Prensa', slug: 'prensa', padre: 0, orden: 8 },
   { nombre: 'Contacto', slug: 'contacto', padre: 0, orden: 9 }
 ];
 
-defaultCategorias.forEach(cat => {
+// Insertar solo si no existen (por slug)
+categoriasPredefinidas.forEach(cat => {
   db.get("SELECT id FROM categorias WHERE slug = ?", [cat.slug], (err, row) => {
     if (!row && !err) {
       db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, ?)",
         [cat.nombre, cat.slug, cat.padre, cat.orden]);
     }
   });
+});
+
+// Insertar subcategorías de ejemplo para 'Imágenes'
+db.get("SELECT id FROM categorias WHERE slug = 'imagenes'", (err, row) => {
+  if (row && !err) {
+    const padreId = row.id;
+    const subCats = [
+      { nombre: 'Mejores imágenes', slug: 'mejores-imagenes', padre: padreId, orden: 1 },
+      { nombre: 'Imagen del mes', slug: 'imagen-mes', padre: padreId, orden: 2 },
+      { nombre: 'Foto de la semana', slug: 'foto-semana', padre: padreId, orden: 3 }
+    ];
+    subCats.forEach(sub => {
+      db.get("SELECT id FROM categorias WHERE slug = ?", [sub.slug], (err2, row2) => {
+        if (!row2 && !err2) {
+          db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, ?)",
+            [sub.nombre, sub.slug, sub.padre, sub.orden]);
+        }
+      });
+    });
+  }
 });
 
 // Insertar configuraciones por defecto
@@ -101,6 +119,5 @@ defaultConfigs.forEach(([clave, valor]) => {
   });
 });
 
-console.log('✅ Base de datos actualizada con categorías jerárquicas');
-
+console.log('✅ Base de datos lista con categorías predefinidas');
 module.exports = db;
