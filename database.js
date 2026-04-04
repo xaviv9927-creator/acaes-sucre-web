@@ -60,8 +60,8 @@ db.run(`
   )
 `);
 
-// Insertar categorías predefinidas (las que quieras que aparezcan arriba)
-const categoriasPredefinidas = [
+// Insertar categorías predefinidas (raíces)
+const categoriasRaiz = [
   { nombre: 'Inicio', slug: 'inicio', padre: 0, orden: 1 },
   { nombre: 'Noticias', slug: 'noticias', padre: 0, orden: 2 },
   { nombre: 'Imágenes', slug: 'imagenes', padre: 0, orden: 3 },
@@ -73,8 +73,7 @@ const categoriasPredefinidas = [
   { nombre: 'Contacto', slug: 'contacto', padre: 0, orden: 9 }
 ];
 
-// Insertar solo si no existen (por slug)
-categoriasPredefinidas.forEach(cat => {
+categoriasRaiz.forEach(cat => {
   db.get("SELECT id FROM categorias WHERE slug = ?", [cat.slug], (err, row) => {
     if (!row && !err) {
       db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, ?)",
