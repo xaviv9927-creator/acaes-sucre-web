@@ -9,12 +9,13 @@
     <title>Admin ACAES | Panel de Control</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 800px; margin: auto; }
+        body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 800px; margin: auto; overscroll-behavior: none; }
         input, select, textarea { width: 100%; margin: 12px 0; background: #1a1f2a; border: 1px solid #00d4ff; color: white; padding: 12px; border-radius: 12px; }
         button { background: #00d4ff; color: #0b0e14; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 40px; cursor: pointer; margin-top: 10px; }
         .preview { background: #0f121c; border: 1px dashed #00d4ff; border-radius: 20px; padding: 15px; margin: 20px 0; }
         .post-item, .usuario-item, .seccion-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
         .post-item button, .seccion-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; display: inline-block; margin-right: 8px; }
+        .post-item button.editar { background: #ffaa00; }
         .seccion-item button.editar { background: #ffaa00; }
         .seccion { background: #0f121c; border-radius: 20px; padding: 20px; margin-bottom: 30px; }
         .error { color: #ff8888; background: #330000; padding: 10px; border-radius: 12px; margin-top: 10px; }
@@ -27,7 +28,11 @@
         .tab.activo { background: #00d4ff; color: #0b0e14; }
         .tab-content { display: none; }
         .tab-content.activo { display: block; }
-        .btn-instalar { background: #00d4ff; color: #0b0e14; border: none; padding: 12px 24px; border-radius: 40px; font-weight: bold; cursor: pointer; margin: 20px auto; display: block; }
+        .btn-instalar { background: #00d4ff; color: #0b0e14; border: none; padding: 12px 24px; border-radius: 40px; font-weight: bold; cursor: pointer; margin: 20px auto 5px auto; display: block; }
+        .credito { text-align: center; font-size: 0.7rem; color: #555; margin-top: 10px; margin-bottom: 20px; }
+        .modal-editar { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .modal-editar-content { background: #1a1f2a; padding: 25px; border-radius: 20px; width: 90%; max-width: 500px; border: 1px solid #00d4ff; max-height: 90%; overflow-y: auto; }
+        .modal-editar-content input, .modal-editar-content select, .modal-editar-content textarea { margin: 8px 0; }
     </style>
     <script>
         let deferredPrompt;
@@ -47,29 +52,39 @@
 </head>
 <body>
 <div id="app"></div>
-<button id="btnInstalar" onclick="instalarApp()" style="display: none; margin: 20px auto;" class="btn-instalar">📲 Instalar App</button>
+<button id="btnInstalar" onclick="instalarApp()" style="display: none; margin: 20px auto 5px auto;" class="btn-instalar">📲 Instalar App</button>
+<div class="credito">Diseñador: Xavier Vargas</div>
 
 <script>
     let logged = false;
     let userAdmin = localStorage.getItem('acaes_admin_nombre') || 'Admin';
 
     async function checkAuth() {
-        const res = await fetch('/api/admin/check');
-        const data = await res.json();
-        logged = data.logged;
-        if (logged) {
-            cargarConfiguracionInicial();
-            renderPanel();
-        } else {
+        try {
+            const res = await fetch('/api/admin/check');
+            const data = await res.json();
+            logged = data.logged;
+            if (logged) {
+                await cargarConfiguracionInicial();
+                renderPanel();
+            } else {
+                renderLogin();
+            }
+        } catch(e) {
             renderLogin();
         }
     }
 
     async function cargarConfiguracionInicial() {
-        const res = await fetch('/api/admin/config');
-        const cfg = await res.json();
-        window.botTokenActual = cfg.bot_token || '';
-        window.adminIdActual = cfg.admin_telegram_id || '';
+        try {
+            const res = await fetch('/api/admin/config');
+            const cfg = await res.json();
+            window.botTokenActual = cfg.bot_token || '';
+            window.adminIdActual = cfg.admin_telegram_id || '';
+        } catch(e) {
+            window.botTokenActual = '';
+            window.adminIdActual = '';
+        }
     }
 
     function renderLogin() {
@@ -85,33 +100,44 @@
 
     window.login = async function() {
         const pass = document.getElementById('pass').value;
-        const res = await fetch('/api/admin/login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ password: pass })
-        });
-        if (res.ok) {
-            logged = true;
-            await cargarConfiguracionInicial();
-            renderPanel();
-        } else {
-            document.getElementById('msg').innerHTML = '<div class="error">Contraseña incorrecta</div>';
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ password: pass })
+            });
+            if (res.ok) {
+                logged = true;
+                localStorage.setItem('acaes_admin_nombre', 'Admin');
+                await cargarConfiguracionInicial();
+                renderPanel();
+            } else {
+                document.getElementById('msg').innerHTML = '<div class="error">Contraseña incorrecta</div>';
+            }
+        } catch(e) {
+            document.getElementById('msg').innerHTML = '<div class="error">Error de conexión</div>';
         }
     };
 
     window.logout = async function() {
-        await fetch('/api/admin/logout', { method: 'POST' });
+        try {
+            await fetch('/api/admin/logout', { method: 'POST' });
+        } catch(e) {}
         logged = false;
+        localStorage.removeItem('acaes_admin_nombre');
+        sessionStorage.clear();
         renderLogin();
     };
 
     let secciones = [];
 
     async function cargarSecciones() {
-        const res = await fetch('/api/secciones');
-        secciones = await res.json();
+        try {
+            const res = await fetch('/api/secciones');
+            secciones = await res.json();
+        } catch(e) { secciones = []; }
         const div = document.getElementById('listaSecciones');
-        if (!secciones.length) { div.innerHTML = '<p>Sin secciones</p>'; return; }
+        if (!secciones || !secciones.length) { div.innerHTML = '<p>Sin secciones</p>'; return; }
         div.innerHTML = secciones.map(sec => `
             <div class="seccion-item">
                 <strong>${escapeHtml(sec.nombre)}</strong> (slug: ${sec.slug}) - Orden: ${sec.orden}
@@ -144,19 +170,22 @@
         const url = id ? `/api/admin/secciones/${id}` : '/api/admin/secciones';
         const method = id ? 'PUT' : 'POST';
         
-        const res = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre, slug, orden })
-        });
-        
-        if (res.ok) {
-            document.getElementById('formSeccion').style.display = 'none';
-            cargarSecciones();
-            cargarSeccionesSelect();
-        } else {
-            const data = await res.json();
-            alert('Error: ' + data.error);
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, slug, orden })
+            });
+            if (res.ok) {
+                document.getElementById('formSeccion').style.display = 'none';
+                cargarSecciones();
+                cargarSeccionesSelect();
+            } else {
+                const data = await res.json();
+                alert('Error: ' + data.error);
+            }
+        } catch(e) {
+            alert('Error de conexión');
         }
     };
 
@@ -170,26 +199,99 @@
 
     window.eliminarSeccion = async function(id) {
         if (!confirm('¿Eliminar esta sección?')) return;
-        const res = await fetch(`/api/admin/secciones/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-            cargarSecciones();
-            cargarSeccionesSelect();
-        } else {
-            alert('Error al eliminar');
+        try {
+            const res = await fetch(`/api/admin/secciones/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                cargarSecciones();
+                cargarSeccionesSelect();
+            } else {
+                alert('Error al eliminar');
+            }
+        } catch(e) {
+            alert('Error de conexión');
         }
     };
 
     async function cargarSeccionesSelect() {
-        const res = await fetch('/api/secciones');
-        const secciones = await res.json();
-        const select = document.getElementById('seccionSelect');
-        if (select) {
-            select.innerHTML = '<option value="">Sin sección</option>';
-            secciones.forEach(sec => {
-                select.innerHTML += `<option value="${sec.id}">${escapeHtml(sec.nombre)}</option>`;
-            });
-        }
+        try {
+            const res = await fetch('/api/secciones');
+            const secciones = await res.json();
+            const select = document.getElementById('seccionSelect');
+            if (select) {
+                select.innerHTML = '<option value="">Sin sección</option>';
+                secciones.forEach(sec => {
+                    select.innerHTML += `<option value="${sec.id}">${escapeHtml(sec.nombre)}</option>`;
+                });
+            }
+        } catch(e) {}
     }
+
+    // Editar publicación
+    window.editarPost = async function(id) {
+        try {
+            const res = await fetch(`/api/posts/${id}`);
+            const post = await res.json();
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal-editar';
+            modal.id = 'modalEditar';
+            modal.innerHTML = `
+                <div class="modal-editar-content">
+                    <h3>✏️ Editar Publicación</h3>
+                    <input type="text" id="editTitulo" value="${escapeHtml(post.titulo)}" placeholder="Título">
+                    <textarea id="editContenido" rows="3" placeholder="Descripción">${escapeHtml(post.contenido || '')}</textarea>
+                    <select id="editTipo">
+                        <option value="Noticia" ${post.tipo === 'Noticia' ? 'selected' : ''}>📰 Noticia</option>
+                        <option value="Investigacion" ${post.tipo === 'Investigacion' ? 'selected' : ''}>🔬 Investigación</option>
+                        <option value="Avistamiento" ${post.tipo === 'Avistamiento' ? 'selected' : ''}>🔭 Avistamiento</option>
+                    </select>
+                    <select id="editSeccion">
+                        <option value="">Sin sección</option>
+                        ${secciones.map(sec => `<option value="${sec.id}" ${post.seccion_id == sec.id ? 'selected' : ''}>${escapeHtml(sec.nombre)}</option>`).join('')}
+                    </select>
+                    <input type="text" id="editEnlace" value="${escapeHtml(post.enlace_externo || '')}" placeholder="Enlace externo">
+                    <input type="file" id="editArchivo" accept="image/*,application/pdf">
+                    <p style="font-size:0.7rem; color:#888;">Si subís un nuevo archivo, reemplazará al anterior</p>
+                    <button onclick="guardarEdicion(${id})">💾 Guardar cambios</button>
+                    <button onclick="cerrarModalEditar()" style="background:#ff4444;">Cancelar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } catch(e) {
+            alert('Error al cargar publicación');
+        }
+    };
+
+    window.cerrarModalEditar = function() {
+        const modal = document.getElementById('modalEditar');
+        if(modal) modal.remove();
+    };
+
+    window.guardarEdicion = async function(id) {
+        const formData = new FormData();
+        formData.append('titulo', document.getElementById('editTitulo').value);
+        formData.append('contenido', document.getElementById('editContenido').value);
+        formData.append('tipo', document.getElementById('editTipo').value);
+        formData.append('seccion_id', document.getElementById('editSeccion').value);
+        formData.append('enlace_externo', document.getElementById('editEnlace').value);
+        formData.append('userAdmin', userAdmin);
+        const archivo = document.getElementById('editArchivo').files[0];
+        if(archivo) formData.append('archivo', archivo);
+        
+        try {
+            const res = await fetch(`/api/posts/${id}`, { method: 'PUT', body: formData });
+            const data = await res.json();
+            if(res.ok) {
+                alert('✅ Publicación actualizada');
+                cerrarModalEditar();
+                cargarListaPosts();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch(e) {
+            alert('Error de conexión');
+        }
+    };
 
     async function renderPanel() {
         const html = `
@@ -322,15 +424,17 @@
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('activo'));
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('activo'));
         document.getElementById(`tab-${tab}`).classList.add('activo');
-        event.target.classList.add('activo');
+        if(event && event.target) event.target.classList.add('activo');
     };
 
     async function cargarWhatsAppActual() {
-        const res = await fetch('/api/config');
-        const cfg = await res.json();
-        if(document.getElementById('whatsappNumero')) {
-            document.getElementById('whatsappNumero').value = cfg.whatsapp;
-        }
+        try {
+            const res = await fetch('/api/config');
+            const cfg = await res.json();
+            if(document.getElementById('whatsappNumero')) {
+                document.getElementById('whatsappNumero').value = cfg.whatsapp;
+            }
+        } catch(e) {}
     }
 
     window.actualizarWhatsApp = async function() {
@@ -339,15 +443,19 @@
             document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>';
             return;
         }
-        const res = await fetch('/api/config/whatsapp', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ numero })
-        });
-        if(res.ok) {
-            document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ WhatsApp actualizado</div>';
-        } else {
-            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
+        try {
+            const res = await fetch('/api/config/whatsapp', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ numero })
+            });
+            if(res.ok) {
+                document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ WhatsApp actualizado</div>';
+            } else {
+                document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
+            }
+        } catch(e) {
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error de conexión</div>';
         }
     };
 
@@ -360,27 +468,31 @@
             return;
         }
         
-        let res1 = await fetch('/api/admin/bot_token', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ token })
-        });
-        
-        let res2 = { ok: true };
-        if (adminId) {
-            res2 = await fetch('/api/admin/admin_id', {
+        try {
+            let res1 = await fetch('/api/admin/bot_token', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: adminId })
+                body: JSON.stringify({ token })
             });
-        }
-        
-        if (res1.ok && res2.ok) {
-            window.botTokenActual = token;
-            window.adminIdActual = adminId;
-            document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Configuración guardada</div>';
-        } else {
-            document.getElementById('msgBot').innerHTML = '<div class="error">Error al guardar</div>';
+            
+            let res2 = { ok: true };
+            if (adminId) {
+                res2 = await fetch('/api/admin/admin_id', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: adminId })
+                });
+            }
+            
+            if (res1.ok && res2.ok) {
+                window.botTokenActual = token;
+                window.adminIdActual = adminId;
+                document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Configuración guardada</div>';
+            } else {
+                document.getElementById('msgBot').innerHTML = '<div class="error">Error al guardar</div>';
+            }
+        } catch(e) {
+            document.getElementById('msgBot').innerHTML = '<div class="error">Error de conexión</div>';
         }
     };
 
@@ -412,65 +524,85 @@
             document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>';
             return;
         }
-        const res = await fetch('/api/admin/cambiar_pass', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ nuevaPass })
-        });
-        if(res.ok) {
-            document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>';
-            document.getElementById('nuevaPass').value = '';
-        } else {
-            document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
+        try {
+            const res = await fetch('/api/admin/cambiar_pass', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nuevaPass })
+            });
+            if(res.ok) {
+                document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>';
+                document.getElementById('nuevaPass').value = '';
+            } else {
+                document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
+            }
+        } catch(e) {
+            document.getElementById('msgPass').innerHTML = '<div class="error">Error de conexión</div>';
         }
     };
 
     async function cargarListaPosts() {
-        const res = await fetch('/api/posts');
-        const posts = await res.json();
-        const div = document.getElementById('listaPosts');
-        if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
-        div.innerHTML = posts.map(post => `
-            <div class="post-item">
-                <strong>${escapeHtml(post.titulo)}</strong><br>
-                <small>${post.tipo} | ${post.seccion_nombre ? post.seccion_nombre + ' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
-                <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
-            </div>
-        `).join('');
+        try {
+            const res = await fetch('/api/posts');
+            const posts = await res.json();
+            const div = document.getElementById('listaPosts');
+            if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
+            div.innerHTML = posts.map(post => `
+                <div class="post-item">
+                    <strong>${escapeHtml(post.titulo)}</strong><br>
+                    <small>${post.tipo} | ${post.seccion_nombre ? post.seccion_nombre + ' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
+                    <button class="editar" onclick="editarPost(${post.id})">✏️ Editar</button>
+                    <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('listaPosts').innerHTML = '<p>Error al cargar</p>';
+        }
     }
 
     async function cargarUsuarios() {
-        const res = await fetch('/api/admin/usuarios');
-        const usuarios = await res.json();
-        const div = document.getElementById('listaUsuarios');
-        if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
-        div.innerHTML = usuarios.map(u => `
-            <div class="usuario-item">
-                <strong>${escapeHtml(u.nombre)}</strong><br>
-                📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip || 'desconocida'}
-            </div>
-        `).join('');
+        try {
+            const res = await fetch('/api/admin/usuarios');
+            const usuarios = await res.json();
+            const div = document.getElementById('listaUsuarios');
+            if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
+            div.innerHTML = usuarios.map(u => `
+                <div class="usuario-item">
+                    <strong>${escapeHtml(u.nombre)}</strong><br>
+                    📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip || 'desconocida'}
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('listaUsuarios').innerHTML = '<p>Error al cargar</p>';
+        }
     }
 
     async function cargarSuscriptores() {
-        const res = await fetch('/api/admin/suscriptores');
-        const subs = await res.json();
-        const div = document.getElementById('listaSuscriptores');
-        if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot.</p>'; return; }
-        div.innerHTML = subs.map(s => `
-            <div class="usuario-item">
-                🤖 ${s.nombre || 'Usuario'} ${s.username ? '@'+s.username : ''}<br>
-                📅 ${new Date(s.fecha_suscripcion).toLocaleString()}
-            </div>
-        `).join('');
+        try {
+            const res = await fetch('/api/admin/suscriptores');
+            const subs = await res.json();
+            const div = document.getElementById('listaSuscriptores');
+            if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot.</p>'; return; }
+            div.innerHTML = subs.map(s => `
+                <div class="usuario-item">
+                    🤖 ${s.nombre || 'Usuario'} ${s.username ? '@'+s.username : ''}<br>
+                    📅 ${new Date(s.fecha_suscripcion).toLocaleString()}
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('listaSuscriptores').innerHTML = '<p>Error al cargar</p>';
+        }
     }
 
     window.eliminarPost = async function(id) {
         if(!confirm('¿Eliminar publicación?')) return;
-        const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
-        if(res.ok) {
-            cargarListaPosts();
-        }
+        try {
+            const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+            if(res.ok) {
+                alert('✅ Publicación eliminada');
+                cargarListaPosts();
+            }
+        } catch(e) {}
     };
 
     function actualizarVistaPrevia() {
