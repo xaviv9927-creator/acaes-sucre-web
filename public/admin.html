@@ -2,9 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin ACAES</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Admin ACAES | Panel de Control</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 800px; margin: auto; }
         input, select, textarea { width: 100%; margin: 12px 0; background: #1a1f2a; border: 1px solid #00d4ff; color: white; padding: 12px; border-radius: 12px; }
         button { background: #00d4ff; color: #0b0e14; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 40px; cursor: pointer; margin-top: 10px; }
@@ -23,10 +27,27 @@
         .tab.activo { background: #00d4ff; color: #0b0e14; }
         .tab-content { display: none; }
         .tab-content.activo { display: block; }
+        .btn-instalar { background: #00d4ff; color: #0b0e14; border: none; padding: 12px 24px; border-radius: 40px; font-weight: bold; cursor: pointer; margin: 20px auto; display: block; }
     </style>
+    <script>
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const btn = document.getElementById('btnInstalar');
+            if(btn) btn.style.display = 'block';
+        });
+        function instalarApp() {
+            if(deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+            }
+        }
+    </script>
 </head>
 <body>
 <div id="app"></div>
+<button id="btnInstalar" onclick="instalarApp()" style="display: none; margin: 20px auto;" class="btn-instalar">📲 Instalar App</button>
 
 <script>
     let logged = false;
