@@ -74,7 +74,6 @@ app.post('/webhook', async (req, res) => {
         text: '✅ ¡Bienvenido a ACAES! Recibirás todas las novedades astronómicas del Estado Sucre.'
       }).catch(e => console.log('Error:', e.message));
       
-      // Notificar al admin
       getAdminTelegramId((err2, adminId) => {
         if (adminId) {
           axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -192,7 +191,7 @@ app.get('/api/usuario/:nombre', (req, res) => {
   });
 });
 
-// ========== API ADMIN (protegidas) ==========
+// ========== API ADMIN ==========
 function requireAdmin(req, res, next) {
   if (!req.session.admin_logged) return res.status(401).json({ error: 'No autorizado' });
   next();
@@ -220,7 +219,6 @@ app.get('/api/admin/check', (req, res) => {
   res.json({ logged: !!req.session.admin_logged });
 });
 
-// Cambiar contraseña admin
 app.post('/api/admin/cambiar_pass', requireAdmin, (req, res) => {
   const { nuevaPass } = req.body;
   if (!nuevaPass || nuevaPass.length < 4) {
@@ -232,7 +230,6 @@ app.post('/api/admin/cambiar_pass', requireAdmin, (req, res) => {
   });
 });
 
-// Cambiar WhatsApp
 app.post('/api/config/whatsapp', requireAdmin, (req, res) => {
   const { numero } = req.body;
   if (!numero || !/^[0-9]{10,15}$/.test(numero)) {
@@ -244,7 +241,6 @@ app.post('/api/config/whatsapp', requireAdmin, (req, res) => {
   });
 });
 
-// Cambiar Token del Bot
 app.post('/api/admin/bot_token', requireAdmin, (req, res) => {
   const { token } = req.body;
   if (!token || token.length < 10) {
@@ -256,7 +252,6 @@ app.post('/api/admin/bot_token', requireAdmin, (req, res) => {
   });
 });
 
-// Cambiar ID de Telegram del admin
 app.post('/api/admin/admin_id', requireAdmin, (req, res) => {
   const { id } = req.body;
   if (!id || !/^[0-9]+$/.test(id)) {
@@ -268,7 +263,6 @@ app.post('/api/admin/admin_id', requireAdmin, (req, res) => {
   });
 });
 
-// Obtener configuración completa (para admin)
 app.get('/api/admin/config', requireAdmin, (req, res) => {
   db.all("SELECT clave, valor FROM configuracion", (err, rows) => {
     const config = {};
@@ -277,7 +271,6 @@ app.get('/api/admin/config', requireAdmin, (req, res) => {
   });
 });
 
-// CRUD de secciones
 app.post('/api/admin/secciones', requireAdmin, (req, res) => {
   const { nombre, slug, orden } = req.body;
   if (!nombre || !slug) return res.status(400).json({ error: 'Nombre y slug requeridos' });
@@ -304,21 +297,18 @@ app.delete('/api/admin/secciones/:id', requireAdmin, (req, res) => {
   });
 });
 
-// Listar usuarios registrados
 app.get('/api/admin/usuarios', requireAdmin, (req, res) => {
   db.all("SELECT id, nombre, ip, fecha_registro FROM usuarios_web ORDER BY fecha_registro DESC", (err, rows) => {
     res.json(rows || []);
   });
 });
 
-// Listar suscriptores de Telegram
 app.get('/api/admin/suscriptores', requireAdmin, (req, res) => {
   db.all("SELECT chat_id, username, nombre, fecha_suscripcion FROM suscriptores_telegram ORDER BY fecha_suscripcion DESC", (err, rows) => {
     res.json(rows || []);
   });
 });
 
-// Eliminar publicación
 app.delete('/api/posts/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.get('SELECT url_media FROM publicaciones WHERE id = ?', [id], (err, row) => {
@@ -333,7 +323,6 @@ app.delete('/api/posts/:id', requireAdmin, (req, res) => {
   });
 });
 
-// Crear publicación
 app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, res) => {
   try {
     const { titulo, contenido, tipo, userAdmin, enlace_externo, seccion_id } = req.body;
@@ -347,7 +336,6 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [titulo, contenido || '', tipo, seccion_id || null, url_media, enlace_externo, userAdmin]);
 
-    // Obtener nombre de la sección
     let seccionNombre = '';
     if (seccion_id) {
       db.get("SELECT nombre FROM secciones WHERE id = ?", [seccion_id], (err, row) => {
