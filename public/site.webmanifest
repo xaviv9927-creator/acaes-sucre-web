@@ -1,0 +1,16 @@
+{
+  "name": "ACAES Sucre",
+  "short_name": "ACAES",
+  "description": "Asociación de Ciencias Astronómicas del Estado Sucre",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0b0e14",
+  "background_color": "#0b0e14",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
