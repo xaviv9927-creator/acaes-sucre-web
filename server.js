@@ -40,56 +40,106 @@ const upload = multer({
   }
 });
 
-// Rate limiting
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
 app.use('/api/', limiter);
 
-// UN SOLO BOT - CORE
-const BOT_TOKEN = '8669080229:AAEKBAK0w-bxVGJ_FFwKfcJpbayej3tIoqY';
+// ========== FUNCIONES PARA OBTENER CONFIGURACIÓN ==========
+function getBotToken(cb) {
+  db.get("SELECT valor FROM configuracion WHERE clave = 'bot_token'", (err, row) => {
+    cb(err, row ? row.valor : '');
+  });
+}
 
-// ========== WEBHOOK PARA TELGRAM (suscribir usuarios) ==========
-app.post(`/webhook/${BOT_TOKEN}`, async (req, res) => {
+function getAdminTelegramId(cb) {
+  db.get("SELECT valor FROM configuracion WHERE clave = 'admin_telegram_id'", (err, row) => {
+    cb(err, row ? row.valor : '');
+  });
+}
+
+// ========== WEBHOOK DE TELEGRAM ==========
+app.post('/webhook', async (req, res) => {
   const update = req.body;
   if (update.message && update.message.text === '/start') {
-    const chat_id = update.message.chat.id;
-    const username = update.message.chat.username || '';
-    const nombre = update.message.chat.first_name || '';
-    
-    db.run(`INSERT OR IGNORE INTO suscriptores_telegram (chat_id, username, nombre) VALUES (?, ?, ?)`,
-      [chat_id, username, nombre], (err) => {
-        if (err) console.error(err);
-        axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          chat_id: chat_id,
-          text: '✅ ¡Bienvenido a ACAES! Recibirás todas las novedades astronómicas del Estado Sucre.'
-        });
+    getBotToken((err, botToken) => {
+      if (err || !botToken) return;
+      const chat_id = update.message.chat.id;
+      const username = update.message.chat.username || '';
+      const nombre = update.message.chat.first_name || '';
+      
+      db.run(`INSERT OR IGNORE INTO suscriptores_telegram (chat_id, username, nombre) VALUES (?, ?, ?)`,
+        [chat_id, username, nombre]);
+      
+      axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        chat_id: chat_id,
+        text: '✅ ¡Bienvenido a ACAES! Recibirás todas las novedades astronómicas del Estado Sucre.'
+      }).catch(e => console.log('Error:', e.message));
+      
+      // Notificar al admin
+      getAdminTelegramId((err2, adminId) => {
+        if (adminId) {
+          axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            chat_id: adminId,
+            text: `🆕 *NUEVO SUSCRIPTOR*\n\n👤 ${nombre} (@${username})`,
+            parse_mode: 'Markdown'
+          }).catch(e => console.log('Error notificando admin:', e.message));
+        }
       });
+    });
   }
   res.sendStatus(200);
 });
 
-// ========== FUNCIÓN PARA ENVIAR A TODOS LOS SUSCRIPTORES ==========
+// ========== FUNCIÓN PARA BROADCAST ==========
 async function broadcastTelegram(mensaje, imagenUrl = null) {
-  db.all('SELECT chat_id FROM suscriptores_telegram', async (err, rows) => {
-    if (err || !rows.length) return;
-    for (const row of rows) {
-      try {
-        if (imagenUrl) {
-          await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-            chat_id: row.chat_id,
-            photo: imagenUrl,
-            caption: mensaje,
-            parse_mode: 'Markdown'
-          });
-        } else {
-          await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: row.chat_id,
-            text: mensaje,
-            parse_mode: 'Markdown'
-          });
+  getBotToken(async (err, botToken) => {
+    if (err || !botToken) return;
+    
+    getAdminTelegramId(async (err2, adminId) => {
+      // Enviar al admin
+      if (adminId) {
+        try {
+          if (imagenUrl) {
+            await axios.post(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+              chat_id: adminId,
+              photo: imagenUrl,
+              caption: mensaje,
+              parse_mode: 'Markdown'
+            });
+          } else {
+            await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              chat_id: adminId,
+              text: mensaje,
+              parse_mode: 'Markdown'
+            });
+          }
+        } catch(e) {}
+      }
+      
+      // Enviar a suscriptores
+      db.all('SELECT chat_id FROM suscriptores_telegram', async (err3, rows) => {
+        if (rows && rows.length) {
+          for (const row of rows) {
+            try {
+              if (imagenUrl) {
+                await axios.post(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+                  chat_id: row.chat_id,
+                  photo: imagenUrl,
+                  caption: mensaje,
+                  parse_mode: 'Markdown'
+                });
+              } else {
+                await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                  chat_id: row.chat_id,
+                  text: mensaje,
+                  parse_mode: 'Markdown'
+                });
+              }
+            } catch(e) {}
+            await new Promise(r => setTimeout(r, 50));
+          }
         }
-      } catch(e) { console.log('Error enviando a', row.chat_id); }
-      await new Promise(r => setTimeout(r, 50)); // Pequeña pausa
-    }
+      });
+    });
   });
 }
 
@@ -100,35 +150,49 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+app.get('/api/secciones', (req, res) => {
+  db.all('SELECT * FROM secciones ORDER BY orden ASC', (err, rows) => {
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/posts', (req, res) => {
+  db.all(`SELECT p.*, s.nombre as seccion_nombre, s.slug as seccion_slug 
+          FROM publicaciones p LEFT JOIN secciones s ON p.seccion_id = s.id 
+          ORDER BY p.fecha_creacion DESC`, (err, rows) => {
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/posts/seccion/:slug', (req, res) => {
+  db.all(`SELECT p.*, s.nombre as seccion_nombre 
+          FROM publicaciones p LEFT JOIN secciones s ON p.seccion_id = s.id 
+          WHERE s.slug = ? ORDER BY p.fecha_creacion DESC`, [req.params.slug], (err, rows) => {
+    res.json(rows || []);
+  });
+});
+
 app.post('/api/registrar', async (req, res) => {
-  const { nombre, email } = req.body;
+  const { nombre } = req.body;
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (!nombre || nombre.length < 3) {
-    return res.status(400).json({ error: 'Nombre muy corto' });
+    return res.status(400).json({ error: 'Nombre muy corto (mínimo 3 letras)' });
   }
-  db.run("INSERT INTO usuarios_web (nombre, email, ip) VALUES (?, ?, ?)", [nombre, email || '', ip], async function(err) {
+  db.run("INSERT INTO usuarios_web (nombre, ip) VALUES (?, ?)", [nombre, ip], async function(err) {
     if (err) return res.status(500).json({ error: 'Error al registrar' });
     
-    // Notificar a los suscriptores de Telegram (broadcast)
-    await broadcastTelegram(`🆕 *NUEVO USUARIO REGISTRADO*\n\n👤 Nombre: ${nombre}\n📧 Email: ${email || 'No'}\n🌐 IP: ${ip}`);
-    
+    await broadcastTelegram(`🆕 *NUEVO USUARIO REGISTRADO*\n\n👤 Nombre: ${nombre}\n🌐 IP: ${ip}`);
     res.json({ success: true, id: this.lastID });
   });
 });
 
 app.get('/api/usuario/:nombre', (req, res) => {
-  db.get("SELECT id, nombre, email FROM usuarios_web WHERE nombre = ?", [req.params.nombre], (err, row) => {
+  db.get("SELECT id, nombre FROM usuarios_web WHERE nombre = ?", [req.params.nombre], (err, row) => {
     res.json({ exists: !!row, user: row });
   });
 });
 
-app.get('/api/posts', (req, res) => {
-  db.all('SELECT * FROM publicaciones ORDER BY fecha_creacion DESC', (err, rows) => {
-    res.json(rows || []);
-  });
-});
-
-// ========== API ADMIN ==========
+// ========== API ADMIN (protegidas) ==========
 function requireAdmin(req, res, next) {
   if (!req.session.admin_logged) return res.status(401).json({ error: 'No autorizado' });
   next();
@@ -156,6 +220,7 @@ app.get('/api/admin/check', (req, res) => {
   res.json({ logged: !!req.session.admin_logged });
 });
 
+// Cambiar contraseña admin
 app.post('/api/admin/cambiar_pass', requireAdmin, (req, res) => {
   const { nuevaPass } = req.body;
   if (!nuevaPass || nuevaPass.length < 4) {
@@ -167,6 +232,7 @@ app.post('/api/admin/cambiar_pass', requireAdmin, (req, res) => {
   });
 });
 
+// Cambiar WhatsApp
 app.post('/api/config/whatsapp', requireAdmin, (req, res) => {
   const { numero } = req.body;
   if (!numero || !/^[0-9]{10,15}$/.test(numero)) {
@@ -178,18 +244,81 @@ app.post('/api/config/whatsapp', requireAdmin, (req, res) => {
   });
 });
 
+// Cambiar Token del Bot
+app.post('/api/admin/bot_token', requireAdmin, (req, res) => {
+  const { token } = req.body;
+  if (!token || token.length < 10) {
+    return res.status(400).json({ error: 'Token inválido' });
+  }
+  db.run("REPLACE INTO configuracion (clave, valor) VALUES ('bot_token', ?)", [token], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// Cambiar ID de Telegram del admin
+app.post('/api/admin/admin_id', requireAdmin, (req, res) => {
+  const { id } = req.body;
+  if (!id || !/^[0-9]+$/.test(id)) {
+    return res.status(400).json({ error: 'ID inválido (solo números)' });
+  }
+  db.run("REPLACE INTO configuracion (clave, valor) VALUES ('admin_telegram_id', ?)", [id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// Obtener configuración completa (para admin)
+app.get('/api/admin/config', requireAdmin, (req, res) => {
+  db.all("SELECT clave, valor FROM configuracion", (err, rows) => {
+    const config = {};
+    rows.forEach(row => { config[row.clave] = row.valor; });
+    res.json(config);
+  });
+});
+
+// CRUD de secciones
+app.post('/api/admin/secciones', requireAdmin, (req, res) => {
+  const { nombre, slug, orden } = req.body;
+  if (!nombre || !slug) return res.status(400).json({ error: 'Nombre y slug requeridos' });
+  db.run("INSERT INTO secciones (nombre, slug, orden) VALUES (?, ?, ?)", [nombre, slug, orden || 0], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, id: this.lastID });
+  });
+});
+
+app.put('/api/admin/secciones/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { nombre, slug, orden } = req.body;
+  db.run("UPDATE secciones SET nombre = ?, slug = ?, orden = ? WHERE id = ?", [nombre, slug, orden, id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+app.delete('/api/admin/secciones/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  db.run("DELETE FROM secciones WHERE id = ?", [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true });
+  });
+});
+
+// Listar usuarios registrados
 app.get('/api/admin/usuarios', requireAdmin, (req, res) => {
-  db.all("SELECT id, nombre, email, ip, fecha_registro FROM usuarios_web ORDER BY fecha_registro DESC", (err, rows) => {
+  db.all("SELECT id, nombre, ip, fecha_registro FROM usuarios_web ORDER BY fecha_registro DESC", (err, rows) => {
     res.json(rows || []);
   });
 });
 
+// Listar suscriptores de Telegram
 app.get('/api/admin/suscriptores', requireAdmin, (req, res) => {
   db.all("SELECT chat_id, username, nombre, fecha_suscripcion FROM suscriptores_telegram ORDER BY fecha_suscripcion DESC", (err, rows) => {
     res.json(rows || []);
   });
 });
 
+// Eliminar publicación
 app.delete('/api/posts/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.get('SELECT url_media FROM publicaciones WHERE id = ?', [id], (err, row) => {
@@ -204,31 +333,34 @@ app.delete('/api/posts/:id', requireAdmin, (req, res) => {
   });
 });
 
+// Crear publicación
 app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, res) => {
   try {
-    const { titulo, tipo, userAdmin, enlace_externo, contenido } = req.body;
+    const { titulo, contenido, tipo, userAdmin, enlace_externo, seccion_id } = req.body;
     const url_media = req.file ? `/uploads/${req.file.filename}` : null;
 
     if (!titulo || !userAdmin) {
       return res.status(400).json({ error: 'Título y admin son obligatorios' });
     }
 
-    // Guardar en BD
-    db.run(`INSERT INTO publicaciones (titulo, contenido, tipo, url_media, enlace_externo, userAdmin)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      [titulo, contenido || '', tipo, url_media, enlace_externo, userAdmin]);
+    db.run(`INSERT INTO publicaciones (titulo, contenido, tipo, seccion_id, url_media, enlace_externo, userAdmin)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [titulo, contenido || '', tipo, seccion_id || null, url_media, enlace_externo, userAdmin]);
 
-    // ARMAR MENSAJE PARA BROADCAST
-    let mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}\n👤 Publicado por: ${userAdmin}`;
-    if (contenido) mensaje += `\n\n${contenido.substring(0, 300)}`;
-    if (enlace_externo) mensaje += `\n\n🔗 ${enlace_externo}`;
-    mensaje += `\n\n🌐 Ver más: ${req.headers.origin}`;
+    // Obtener nombre de la sección
+    let seccionNombre = '';
+    if (seccion_id) {
+      db.get("SELECT nombre FROM secciones WHERE id = ?", [seccion_id], (err, row) => {
+        if (row) seccionNombre = row.nombre;
+      });
+    }
 
-    // Enviar a TODOS los suscriptores de Telegram
+    const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}${seccionNombre ? `\n📁 Sección: ${seccionNombre}` : ''}\n👤 Publicado por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0, 300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin}`;
+    
     const imagenUrl = url_media ? `${req.headers.origin}${url_media}` : null;
     await broadcastTelegram(mensaje, imagenUrl);
 
-    res.json({ success: true, message: 'Publicado y enviado a todos los suscriptores' });
+    res.json({ success: true, message: 'Publicado y enviado' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error interno' });
