@@ -9,14 +9,20 @@
         input, select, textarea { width: 100%; margin: 12px 0; background: #1a1f2a; border: 1px solid #00d4ff; color: white; padding: 12px; border-radius: 12px; }
         button { background: #00d4ff; color: #0b0e14; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 40px; cursor: pointer; margin-top: 10px; }
         .preview { background: #0f121c; border: 1px dashed #00d4ff; border-radius: 20px; padding: 15px; margin: 20px 0; }
-        .post-item, .usuario-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
-        .post-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; }
+        .post-item, .usuario-item, .seccion-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
+        .post-item button, .seccion-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; display: inline-block; margin-right: 8px; }
+        .seccion-item button.editar { background: #ffaa00; }
         .seccion { background: #0f121c; border-radius: 20px; padding: 20px; margin-bottom: 30px; }
         .error { color: #ff8888; background: #330000; padding: 10px; border-radius: 12px; margin-top: 10px; }
         .exito { color: #88ff88; background: #003300; padding: 10px; border-radius: 12px; }
         hr { border-color: #00d4ff33; margin: 20px 0; }
         h3 { color: #00d4ff; margin-top: 0; }
         .login-box { max-width: 400px; margin: 100px auto; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { background: #1a1f2a; padding: 10px 20px; border-radius: 40px; cursor: pointer; }
+        .tab.activo { background: #00d4ff; color: #0b0e14; }
+        .tab-content { display: none; }
+        .tab-content.activo { display: block; }
     </style>
 </head>
 <body>
@@ -31,10 +37,18 @@
         const data = await res.json();
         logged = data.logged;
         if (logged) {
+            cargarConfiguracionInicial();
             renderPanel();
         } else {
             renderLogin();
         }
+    }
+
+    async function cargarConfiguracionInicial() {
+        const res = await fetch('/api/admin/config');
+        const cfg = await res.json();
+        window.botTokenActual = cfg.bot_token || '';
+        window.adminIdActual = cfg.admin_telegram_id || '';
     }
 
     function renderLogin() {
@@ -57,6 +71,7 @@
         });
         if (res.ok) {
             logged = true;
+            await cargarConfiguracionInicial();
             renderPanel();
         } else {
             document.getElementById('msg').innerHTML = '<div class="error">Contraseña incorrecta</div>';
@@ -69,65 +84,215 @@
         renderLogin();
     };
 
+    let secciones = [];
+
+    async function cargarSecciones() {
+        const res = await fetch('/api/secciones');
+        secciones = await res.json();
+        const div = document.getElementById('listaSecciones');
+        if (!secciones.length) { div.innerHTML = '<p>Sin secciones</p>'; return; }
+        div.innerHTML = secciones.map(sec => `
+            <div class="seccion-item">
+                <strong>${escapeHtml(sec.nombre)}</strong> (slug: ${sec.slug}) - Orden: ${sec.orden}
+                <br>
+                <button class="editar" onclick="editarSeccion(${sec.id}, '${escapeHtml(sec.nombre)}', '${sec.slug}', ${sec.orden})">✏️ Editar</button>
+                <button onclick="eliminarSeccion(${sec.id})">🗑️ Eliminar</button>
+            </div>
+        `).join('');
+    }
+
+    window.mostrarFormNuevaSeccion = function() {
+        document.getElementById('formSeccion').style.display = 'block';
+        document.getElementById('seccionId').value = '';
+        document.getElementById('seccionNombre').value = '';
+        document.getElementById('seccionSlug').value = '';
+        document.getElementById('seccionOrden').value = '0';
+    };
+
+    window.guardarSeccion = async function() {
+        const id = document.getElementById('seccionId').value;
+        const nombre = document.getElementById('seccionNombre').value.trim();
+        const slug = document.getElementById('seccionSlug').value.trim().toLowerCase().replace(/ /g, '_');
+        const orden = parseInt(document.getElementById('seccionOrden').value) || 0;
+        
+        if (!nombre || !slug) {
+            alert('Nombre y slug requeridos');
+            return;
+        }
+        
+        const url = id ? `/api/admin/secciones/${id}` : '/api/admin/secciones';
+        const method = id ? 'PUT' : 'POST';
+        
+        const res = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, slug, orden })
+        });
+        
+        if (res.ok) {
+            document.getElementById('formSeccion').style.display = 'none';
+            cargarSecciones();
+            // Actualizar también el select de secciones en publicar
+            cargarSeccionesSelect();
+        } else {
+            const data = await res.json();
+            alert('Error: ' + data.error);
+        }
+    };
+
+    window.editarSeccion = function(id, nombre, slug, orden) {
+        document.getElementById('formSeccion').style.display = 'block';
+        document.getElementById('seccionId').value = id;
+        document.getElementById('seccionNombre').value = nombre;
+        document.getElementById('seccionSlug').value = slug;
+        document.getElementById('seccionOrden').value = orden;
+    };
+
+    window.eliminarSeccion = async function(id) {
+        if (!confirm('¿Eliminar esta sección? Las publicaciones quedarán sin sección')) return;
+        const res = await fetch(`/api/admin/secciones/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            cargarSecciones();
+            cargarSeccionesSelect();
+        } else {
+            alert('Error al eliminar');
+        }
+    };
+
+    async function cargarSeccionesSelect() {
+        const res = await fetch('/api/secciones');
+        const secciones = await res.json();
+        const select = document.getElementById('seccionSelect');
+        if (select) {
+            select.innerHTML = '<option value="">Sin sección</option>';
+            secciones.forEach(sec => {
+                select.innerHTML += `<option value="${sec.id}">${escapeHtml(sec.nombre)}</option>`;
+            });
+        }
+    }
+
     async function renderPanel() {
         const html = `
             <h2>🛸 Panel de Control ACAES</h2>
             <button onclick="logout()" style="background:#ff4444; margin-bottom:20px;">🚪 Cerrar sesión</button>
             
-            <div class="seccion">
-                <h3>📱 Configurar WhatsApp</h3>
-                <input type="text" id="whatsappNumero" placeholder="Número (ej: 584241234567)">
-                <button onclick="actualizarWhatsApp()">Actualizar</button>
-                <div id="msgWhatsapp"></div>
+            <div class="tabs">
+                <div class="tab activo" onclick="mostrarTab('publicar')">📝 Publicar</div>
+                <div class="tab" onclick="mostrarTab('secciones')">📁 Secciones</div>
+                <div class="tab" onclick="mostrarTab('bot')">🤖 Bot Telegram</div>
+                <div class="tab" onclick="mostrarTab('config')">⚙️ Configuración</div>
+                <div class="tab" onclick="mostrarTab('usuarios')">👥 Usuarios</div>
+                <div class="tab" onclick="mostrarTab('suscriptores')">📡 Suscriptores</div>
+                <div class="tab" onclick="mostrarTab('posts')">📋 Publicaciones</div>
             </div>
-
-            <div class="seccion">
-                <h3>🔑 Cambiar contraseña admin</h3>
-                <input type="password" id="nuevaPass" placeholder="Nueva contraseña (mínimo 4 caracteres)">
-                <button onclick="cambiarPass()">Cambiar contraseña</button>
-                <div id="msgPass"></div>
+            
+            <div id="tab-publicar" class="tab-content activo">
+                <div class="seccion">
+                    <h3>📝 Nueva publicación</h3>
+                    <form id="formPublicar" enctype="multipart/form-data">
+                        <input type="text" id="titulo" placeholder="Título *" required>
+                        <textarea id="contenido" rows="3" placeholder="Descripción"></textarea>
+                        <select id="tipo">
+                            <option value="Noticia">📰 Noticia</option>
+                            <option value="Investigacion">🔬 Investigación</option>
+                            <option value="Avistamiento">🔭 Avistamiento</option>
+                        </select>
+                        <select id="seccionSelect">
+                            <option value="">Sin sección</option>
+                        </select>
+                        <input type="text" id="enlace_externo" placeholder="Enlace externo">
+                        <input type="file" id="archivo" accept="image/*,application/pdf">
+                        <button type="submit">🚀 PUBLICAR Y ENVIAR A TODOS</button>
+                    </form>
+                    <div class="preview"><strong>Vista previa:</strong><div id="previewContent"></div></div>
+                </div>
             </div>
-
-            <div class="seccion">
-                <h3>📝 Nueva publicación</h3>
-                <form id="formPublicar" enctype="multipart/form-data">
-                    <input type="text" id="titulo" placeholder="Título *" required>
-                    <textarea id="contenido" rows="3" placeholder="Descripción"></textarea>
-                    <select id="tipo">
-                        <option value="Noticia">📰 Noticia</option>
-                        <option value="Investigacion">🔬 Investigación</option>
-                        <option value="Avistamiento">🔭 Avistamiento</option>
-                    </select>
-                    <input type="text" id="enlace_externo" placeholder="Enlace externo">
-                    <input type="file" id="archivo" accept="image/*,application/pdf">
-                    <button type="submit">🚀 PUBLICAR Y ENVIAR A TODOS</button>
-                </form>
-                <div class="preview"><strong>Vista previa:</strong><div id="previewContent"></div></div>
+            
+            <div id="tab-secciones" class="tab-content">
+                <div class="seccion">
+                    <h3>📁 Gestionar Secciones</h3>
+                    <button onclick="mostrarFormNuevaSeccion()" style="background:#00d4ff; margin-bottom:15px;">+ Nueva Sección</button>
+                    <div id="listaSecciones">Cargando...</div>
+                    <div id="formSeccion" style="display:none; margin-top:20px; padding:15px; background:#1a1f2a; border-radius:12px;">
+                        <h4>Formulario Sección</h4>
+                        <input type="hidden" id="seccionId">
+                        <input type="text" id="seccionNombre" placeholder="Nombre (ej: Astrofísica)">
+                        <input type="text" id="seccionSlug" placeholder="Slug (ej: astrofisica)">
+                        <input type="number" id="seccionOrden" placeholder="Orden (1,2,3...)" value="0">
+                        <button onclick="guardarSeccion()">Guardar Sección</button>
+                        <button onclick="document.getElementById('formSeccion').style.display='none'">Cancelar</button>
+                    </div>
+                </div>
             </div>
-
-            <div class="seccion">
-                <h3>📋 Publicaciones (${userAdmin})</h3>
-                <div id="listaPosts">Cargando...</div>
+            
+            <div id="tab-bot" class="tab-content">
+                <div class="seccion">
+                    <h3>🤖 Configuración del Bot de Telegram</h3>
+                    <label>Token del Bot:</label>
+                    <input type="text" id="botToken" placeholder="Token del bot">
+                    <label>Tu ID de Telegram (admin):</label>
+                    <input type="text" id="adminId" placeholder="Ej: 7501019675">
+                    <button onclick="guardarConfigBot()">Guardar configuración del Bot</button>
+                    <div id="msgBot"></div>
+                    <hr>
+                    <p><strong>📌 Configurar Webhook (una sola vez):</strong></p>
+                    <button onclick="configurarWebhook()">Configurar Webhook</button>
+                    <div id="msgWebhook"></div>
+                </div>
             </div>
-
-            <div class="seccion">
-                <h3>👥 Usuarios registrados en web</h3>
-                <div id="listaUsuarios">Cargando...</div>
+            
+            <div id="tab-config" class="tab-content">
+                <div class="seccion">
+                    <h3>⚙️ Configuración General</h3>
+                    <label>WhatsApp (solo números):</label>
+                    <input type="text" id="whatsappNumero" placeholder="584241234567">
+                    <button onclick="actualizarWhatsApp()">Actualizar WhatsApp</button>
+                    <div id="msgWhatsapp"></div>
+                    <hr>
+                    <label>Cambiar contraseña admin:</label>
+                    <input type="password" id="nuevaPass" placeholder="Nueva contraseña">
+                    <button onclick="cambiarPass()">Cambiar contraseña</button>
+                    <div id="msgPass"></div>
+                </div>
             </div>
-
-            <div class="seccion">
-                <h3>🤖 Suscriptores de Telegram</h3>
-                <div id="listaSuscriptores">Cargando...</div>
+            
+            <div id="tab-usuarios" class="tab-content">
+                <div class="seccion">
+                    <h3>👥 Usuarios registrados en la web</h3>
+                    <div id="listaUsuarios">Cargando...</div>
+                </div>
+            </div>
+            
+            <div id="tab-suscriptores" class="tab-content">
+                <div class="seccion">
+                    <h3>📡 Suscriptores de Telegram</h3>
+                    <div id="listaSuscriptores">Cargando...</div>
+                </div>
+            </div>
+            
+            <div id="tab-posts" class="tab-content">
+                <div class="seccion">
+                    <h3>📋 Publicaciones (${userAdmin})</h3>
+                    <div id="listaPosts">Cargando...</div>
+                </div>
             </div>
         `;
         document.getElementById('app').innerHTML = html;
         
-        cargarWhatsAppActual();
-        cargarListaPosts();
-        cargarUsuarios();
-        cargarSuscriptores();
-        actualizarVistaPrevia();
+        // Cargar datos
+        await cargarSecciones();
+        await cargarSeccionesSelect();
+        await cargarListaPosts();
+        await cargarUsuarios();
+        await cargarSuscriptores();
+        await cargarWhatsAppActual();
         
+        // Cargar valores actuales del bot
+        if (window.botTokenActual) document.getElementById('botToken').value = window.botTokenActual;
+        if (window.adminIdActual) document.getElementById('adminId').value = window.adminIdActual;
+        
+        // Vista previa
+        actualizarVistaPrevia();
         document.getElementById('formPublicar').onsubmit = publicar;
         document.getElementById('titulo').addEventListener('input', actualizarVistaPrevia);
         document.getElementById('contenido').addEventListener('input', actualizarVistaPrevia);
@@ -136,11 +301,18 @@
         document.getElementById('archivo').addEventListener('change', actualizarVistaPrevia);
     }
 
+    window.mostrarTab = function(tab) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('activo'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('activo'));
+        document.getElementById(`tab-${tab}`).classList.add('activo');
+        event.target.classList.add('activo');
+    };
+
     async function cargarWhatsAppActual() {
         const res = await fetch('/api/config');
         const cfg = await res.json();
         if(document.getElementById('whatsappNumero')) {
-            document.getElementById('whatsappNumero').placeholder = cfg.whatsapp;
+            document.getElementById('whatsappNumero').value = cfg.whatsapp;
         }
     }
 
@@ -155,11 +327,67 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ numero })
         });
-        const data = await res.json();
         if(res.ok) {
-            document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ Actualizado</div>';
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ WhatsApp actualizado</div>';
         } else {
-            document.getElementById('msgWhatsapp').innerHTML = `<div class="error">${data.error}</div>`;
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
+        }
+    };
+
+    window.guardarConfigBot = async function() {
+        const token = document.getElementById('botToken').value.trim();
+        const adminId = document.getElementById('adminId').value.trim();
+        
+        if (!token) {
+            document.getElementById('msgBot').innerHTML = '<div class="error">Token requerido</div>';
+            return;
+        }
+        
+        // Guardar token
+        let res1 = await fetch('/api/admin/bot_token', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ token })
+        });
+        
+        // Guardar admin ID
+        let res2 = { ok: true };
+        if (adminId) {
+            res2 = await fetch('/api/admin/admin_id', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: adminId })
+            });
+        }
+        
+        if (res1.ok && res2.ok) {
+            window.botTokenActual = token;
+            window.adminIdActual = adminId;
+            document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Configuración guardada</div>';
+        } else {
+            document.getElementById('msgBot').innerHTML = '<div class="error">Error al guardar</div>';
+        }
+    };
+
+    window.configurarWebhook = async function() {
+        const token = document.getElementById('botToken').value.trim();
+        if (!token) {
+            document.getElementById('msgWebhook').innerHTML = '<div class="error">Primero guardá el token</div>';
+            return;
+        }
+        const urlActual = window.location.origin;
+        const webhookUrl = `${urlActual}/webhook`;
+        
+        try {
+            const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('msgWebhook').innerHTML = '<div class="exito">✅ Webhook configurado correctamente</div>';
+            } else {
+                document.getElementById('msgWebhook').innerHTML = `<div class="error">Error: ${data.description}</div>`;
+            }
+        } catch(e) {
+            document.getElementById('msgWebhook').innerHTML = '<div class="error">Error de conexión</div>';
         }
     };
 
@@ -190,7 +418,7 @@
         div.innerHTML = posts.map(post => `
             <div class="post-item">
                 <strong>${escapeHtml(post.titulo)}</strong><br>
-                <small>${post.tipo} | ${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
+                <small>${post.tipo} | ${post.seccion_nombre ? post.seccion_nombre + ' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
                 <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
             </div>
         `).join('');
@@ -204,7 +432,7 @@
         div.innerHTML = usuarios.map(u => `
             <div class="usuario-item">
                 <strong>${escapeHtml(u.nombre)}</strong><br>
-                📧 ${u.email || 'Sin email'} | 📅 ${new Date(u.fecha_registro).toLocaleString()}
+                📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip || 'desconocida'}
             </div>
         `).join('');
     }
@@ -213,7 +441,7 @@
         const res = await fetch('/api/admin/suscriptores');
         const subs = await res.json();
         const div = document.getElementById('listaSuscriptores');
-        if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot @acaes_core_bot</p>'; return; }
+        if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot.</p>'; return; }
         div.innerHTML = subs.map(s => `
             <div class="usuario-item">
                 🤖 ${s.nombre || 'Usuario'} ${s.username ? '@'+s.username : ''}<br>
@@ -250,6 +478,7 @@
         formData.append('titulo', document.getElementById('titulo').value);
         formData.append('contenido', document.getElementById('contenido').value);
         formData.append('tipo', document.getElementById('tipo').value);
+        formData.append('seccion_id', document.getElementById('seccionSelect').value);
         formData.append('enlace_externo', document.getElementById('enlace_externo').value);
         formData.append('userAdmin', userAdmin);
         const archivo = document.getElementById('archivo').files[0];
@@ -263,7 +492,7 @@
             const res = await fetch('/api/publicar', { method: 'POST', body: formData });
             const data = await res.json();
             if(res.ok) {
-                alert('✅ Publicado y enviado a todos los suscriptores de Telegram');
+                alert('✅ Publicado y enviado a todos los suscriptores');
                 document.getElementById('formPublicar').reset();
                 actualizarVistaPrevia();
                 cargarListaPosts();
@@ -278,7 +507,10 @@
         }
     }
 
-    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';}); }
+    function escapeHtml(str) { 
+        if(!str) return '';
+        return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';});
+    }
     
     checkAuth();
 </script>
