@@ -1,4 +1,5 @@
 node_modules/
 acaes.db
+acaes_nueva.db
 public/uploads/
 .env
