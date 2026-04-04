@@ -132,7 +132,6 @@
         if (res.ok) {
             document.getElementById('formSeccion').style.display = 'none';
             cargarSecciones();
-            // Actualizar también el select de secciones en publicar
             cargarSeccionesSelect();
         } else {
             const data = await res.json();
@@ -149,7 +148,7 @@
     };
 
     window.eliminarSeccion = async function(id) {
-        if (!confirm('¿Eliminar esta sección? Las publicaciones quedarán sin sección')) return;
+        if (!confirm('¿Eliminar esta sección?')) return;
         const res = await fetch(`/api/admin/secciones/${id}`, { method: 'DELETE' });
         if (res.ok) {
             cargarSecciones();
@@ -279,7 +278,6 @@
         `;
         document.getElementById('app').innerHTML = html;
         
-        // Cargar datos
         await cargarSecciones();
         await cargarSeccionesSelect();
         await cargarListaPosts();
@@ -287,11 +285,9 @@
         await cargarSuscriptores();
         await cargarWhatsAppActual();
         
-        // Cargar valores actuales del bot
         if (window.botTokenActual) document.getElementById('botToken').value = window.botTokenActual;
         if (window.adminIdActual) document.getElementById('adminId').value = window.adminIdActual;
         
-        // Vista previa
         actualizarVistaPrevia();
         document.getElementById('formPublicar').onsubmit = publicar;
         document.getElementById('titulo').addEventListener('input', actualizarVistaPrevia);
@@ -343,14 +339,12 @@
             return;
         }
         
-        // Guardar token
         let res1 = await fetch('/api/admin/bot_token', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ token })
         });
         
-        // Guardar admin ID
         let res2 = { ok: true };
         if (adminId) {
             res2 = await fetch('/api/admin/admin_id', {
