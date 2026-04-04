@@ -1,6 +1,6 @@
 {
-  "name": "acaes-sucre-broadcast",
-  "version": "5.0.0",
+  "name": "acaes-sucre-configurable",
+  "version": "7.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
