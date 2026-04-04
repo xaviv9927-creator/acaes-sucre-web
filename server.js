@@ -12,10 +12,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 app.use(session({
-  secret: 'acaes_sucre_secret',
+  secret: 'acaes_sucre_secret_2024',
   resave: false,
-  saveUninitialized: true,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 }
+  saveUninitialized: false,   // evitar crear sesiones vacías
+  cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, secure: false }
 }));
 
 // Carpeta de uploads
@@ -23,7 +23,6 @@ const uploadDir = path.join(__dirname, 'public/uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 app.use('/uploads', express.static(uploadDir));
 
-// Multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -43,19 +42,13 @@ const upload = multer({
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
 app.use('/api/', limiter);
 
-// ========== FUNCIONES PARA OBTENER CONFIGURACIÓN ==========
+// Funciones de configuración
 function getBotToken(cb) {
-  db.get("SELECT valor FROM configuracion WHERE clave = 'bot_token'", (err, row) => {
-    cb(err, row ? row.valor : '');
-  });
+  db.get("SELECT valor FROM configuracion WHERE clave = 'bot_token'", (err, row) => cb(err, row ? row.valor : ''));
 }
-
 function getAdminTelegramId(cb) {
-  db.get("SELECT valor FROM configuracion WHERE clave = 'admin_telegram_id'", (err, row) => {
-    cb(err, row ? row.valor : '');
-  });
+  db.get("SELECT valor FROM configuracion WHERE clave = 'admin_telegram_id'", (err, row) => cb(err, row ? row.valor : ''));
 }
-
 function notificarAdmin(mensaje) {
   getBotToken((err, botToken) => {
     if (err || !botToken) return;
@@ -70,7 +63,6 @@ function notificarAdmin(mensaje) {
     });
   });
 }
-
 async function broadcastTelegram(mensaje, imagenUrl = null) {
   getBotToken(async (err, botToken) => {
     if (err || !botToken) return;
@@ -120,7 +112,7 @@ async function broadcastTelegram(mensaje, imagenUrl = null) {
   });
 }
 
-// ========== WEBHOOK TELEGRAM ==========
+// Webhook Telegram
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   if (update.message && update.message.text === '/start') {
@@ -148,23 +140,20 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Obtener árbol de categorías (para menú)
 app.get('/api/categorias', (req, res) => {
   db.all('SELECT * FROM categorias ORDER BY padre_id, orden', (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Construir árbol
-    const categorias = {};
-    rows.forEach(c => { categorias[c.id] = { ...c, hijos: [] }; });
+    const map = {};
+    rows.forEach(c => { map[c.id] = { ...c, hijos: [] }; });
     const arbol = [];
     rows.forEach(c => {
-      if (c.padre_id === 0) arbol.push(categorias[c.id]);
-      else if (categorias[c.padre_id]) categorias[c.padre_id].hijos.push(categorias[c.id]);
+      if (c.padre_id === 0) arbol.push(map[c.id]);
+      else if (map[c.padre_id]) map[c.padre_id].hijos.push(map[c.id]);
     });
     res.json(arbol);
   });
 });
 
-// Obtener publicaciones (con nombre de categoría)
 app.get('/api/posts', (req, res) => {
   db.all(`SELECT p.*, c.nombre as categoria_nombre, c.slug as categoria_slug
           FROM publicaciones p
@@ -174,7 +163,6 @@ app.get('/api/posts', (req, res) => {
   });
 });
 
-// Filtrar por categoría (slug)
 app.get('/api/posts/categoria/:slug', (req, res) => {
   const { slug } = req.params;
   db.get('SELECT id FROM categorias WHERE slug = ?', [slug], (err, cat) => {
@@ -189,7 +177,6 @@ app.get('/api/posts/categoria/:slug', (req, res) => {
   });
 });
 
-// Obtener una publicación
 app.get('/api/posts/:id', (req, res) => {
   db.get('SELECT * FROM publicaciones WHERE id = ?', [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -201,9 +188,7 @@ app.get('/api/posts/:id', (req, res) => {
 app.post('/api/registrar', async (req, res) => {
   const { nombre } = req.body;
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  if (!nombre || nombre.length < 3) {
-    return res.status(400).json({ error: 'Nombre muy corto' });
-  }
+  if (!nombre || nombre.length < 3) return res.status(400).json({ error: 'Nombre muy corto' });
   db.run("INSERT INTO usuarios_web (nombre, ip) VALUES (?, ?)", [nombre, ip], async function(err) {
     if (err) return res.status(500).json({ error: 'Error al registrar' });
     notificarAdmin(`🆕 *NUEVO USUARIO REGISTRADO*\n\n👤 Nombre: ${nombre}\n🌐 IP: ${ip}`);
@@ -217,7 +202,7 @@ app.get('/api/usuario/:nombre', (req, res) => {
   });
 });
 
-// ========== API ADMIN (protegidas) ==========
+// ========== API ADMIN ==========
 function requireAdmin(req, res, next) {
   if (!req.session.admin_logged) return res.status(401).json({ error: 'No autorizado' });
   next();
@@ -229,6 +214,7 @@ app.post('/api/admin/login', (req, res) => {
     const adminPass = row ? row.valor : '12345678';
     if (password === adminPass) {
       req.session.admin_logged = true;
+      req.session.save(); // asegurar persistencia
       const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
       notificarAdmin(`🔐 *INICIO DE SESIÓN ADMIN*\n\n🌐 IP: ${ip}\n📅 ${new Date().toLocaleString()}`);
       res.json({ success: true });
@@ -249,9 +235,7 @@ app.get('/api/admin/check', (req, res) => {
 
 app.post('/api/admin/cambiar_pass', requireAdmin, (req, res) => {
   const { nuevaPass } = req.body;
-  if (!nuevaPass || nuevaPass.length < 4) {
-    return res.status(400).json({ error: 'Mínimo 4 caracteres' });
-  }
+  if (!nuevaPass || nuevaPass.length < 4) return res.status(400).json({ error: 'Mínimo 4 caracteres' });
   db.run("REPLACE INTO configuracion (clave, valor) VALUES ('admin_pass', ?)", [nuevaPass], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     notificarAdmin(`🔑 *CONTRASEÑA ADMIN CAMBIADA*`);
@@ -261,9 +245,7 @@ app.post('/api/admin/cambiar_pass', requireAdmin, (req, res) => {
 
 app.post('/api/config/whatsapp', requireAdmin, (req, res) => {
   const { numero } = req.body;
-  if (!numero || !/^[0-9]{10,15}$/.test(numero)) {
-    return res.status(400).json({ error: 'Número inválido' });
-  }
+  if (!numero || !/^[0-9]{10,15}$/.test(numero)) return res.status(400).json({ error: 'Número inválido' });
   db.run("REPLACE INTO configuracion (clave, valor) VALUES ('whatsapp', ?)", [numero], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     notificarAdmin(`📱 *WHATSAPP ACTUALIZADO: +${numero}`);
@@ -299,7 +281,7 @@ app.get('/api/admin/config', requireAdmin, (req, res) => {
   });
 });
 
-// CRUD de categorías (para admin)
+// CRUD de categorías
 app.post('/api/admin/categorias', requireAdmin, (req, res) => {
   const { nombre, slug, padre_id, orden } = req.body;
   if (!nombre || !slug) return res.status(400).json({ error: 'Nombre y slug requeridos' });
@@ -331,6 +313,18 @@ app.delete('/api/admin/categorias/:id', requireAdmin, (req, res) => {
   });
 });
 
+// Endpoint para crear subcategoría sobre la marcha (desde el panel de publicación)
+app.post('/api/admin/subcategoria', requireAdmin, (req, res) => {
+  const { nombre, slug, padre_id } = req.body;
+  if (!nombre || !slug || !padre_id) return res.status(400).json({ error: 'Datos incompletos' });
+  db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, (SELECT COALESCE(MAX(orden),0)+1 FROM categorias WHERE padre_id=?))",
+    [nombre, slug, padre_id, padre_id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      notificarAdmin(`📁 *SUBCATEGORÍA CREADA*: ${nombre} (padre ID ${padre_id})`);
+      res.json({ success: true, id: this.lastID });
+    });
+});
+
 app.get('/api/admin/usuarios', requireAdmin, (req, res) => {
   db.all("SELECT id, nombre, ip, fecha_registro FROM usuarios_web ORDER BY fecha_registro DESC", (err, rows) => {
     res.json(rows || []);
@@ -343,7 +337,7 @@ app.get('/api/admin/suscriptores', requireAdmin, (req, res) => {
   });
 });
 
-// CRUD de publicaciones (con categoría)
+// CRUD publicaciones
 app.delete('/api/posts/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.get('SELECT titulo, url_media FROM publicaciones WHERE id = ?', [id], (err, row) => {
@@ -364,25 +358,19 @@ app.put('/api/posts/:id', requireAdmin, upload.single('archivo'), async (req, re
     const { id } = req.params;
     const { titulo, contenido, tipo, userAdmin, enlace_externo, categoria_id } = req.body;
     const url_media = req.file ? `/uploads/${req.file.filename}` : null;
-
-    if (!titulo || !userAdmin) {
-      return res.status(400).json({ error: 'Título y admin obligatorios' });
-    }
-
+    if (!titulo || !userAdmin) return res.status(400).json({ error: 'Título y admin obligatorios' });
     db.get('SELECT url_media FROM publicaciones WHERE id = ?', [id], (err, old) => {
       if (old && old.url_media && url_media && old.url_media !== url_media) {
         const oldPath = path.join(__dirname, 'public', old.url_media);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
     });
-
     const updateQuery = url_media
       ? `UPDATE publicaciones SET titulo = ?, contenido = ?, tipo = ?, categoria_id = ?, url_media = ?, enlace_externo = ?, userAdmin = ? WHERE id = ?`
       : `UPDATE publicaciones SET titulo = ?, contenido = ?, tipo = ?, categoria_id = ?, enlace_externo = ?, userAdmin = ? WHERE id = ?`;
     const params = url_media
       ? [titulo, contenido || '', tipo, categoria_id || null, url_media, enlace_externo, userAdmin, id]
       : [titulo, contenido || '', tipo, categoria_id || null, enlace_externo, userAdmin, id];
-
     db.run(updateQuery, params, function(err) {
       if (err) return res.status(500).json({ error: err.message });
       notificarAdmin(`✏️ *PUBLICACIÓN EDITADA*: ${titulo}\n👤 ${userAdmin}`);
@@ -398,17 +386,12 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
   try {
     const { titulo, contenido, tipo, userAdmin, enlace_externo, categoria_id } = req.body;
     const url_media = req.file ? `/uploads/${req.file.filename}` : null;
-
-    if (!titulo || !userAdmin) {
-      return res.status(400).json({ error: 'Título y admin obligatorios' });
-    }
-
+    if (!titulo || !userAdmin) return res.status(400).json({ error: 'Título y admin obligatorios' });
     db.run(`INSERT INTO publicaciones (titulo, contenido, tipo, categoria_id, url_media, enlace_externo, userAdmin)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [titulo, contenido || '', tipo, categoria_id || null, url_media, enlace_externo, userAdmin], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         notificarAdmin(`📢 *NUEVA PUBLICACIÓN*: ${titulo}\n👤 ${userAdmin}`);
-        // Obtener nombre de categoría para el broadcast
         let catNombre = '';
         if (categoria_id) {
           db.get("SELECT nombre FROM categorias WHERE id = ?", [categoria_id], (err2, row) => {
@@ -430,13 +413,9 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
   }
 });
 
-// ========== RUTAS HTML ==========
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
+// Rutas HTML
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/index.html', (req, res) => res.redirect('/'));
 app.get('/admin.html', (req, res) => res.redirect('/admin'));
 app.use(express.static('public'));
