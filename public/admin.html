@@ -9,14 +9,13 @@
     <title>Admin ACAES | Panel de Control</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 800px; margin: auto; overscroll-behavior: none; }
+        body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 1000px; margin: auto; overscroll-behavior: none; }
         input, select, textarea { width: 100%; margin: 12px 0; background: #1a1f2a; border: 1px solid #00d4ff; color: white; padding: 12px; border-radius: 12px; }
         button { background: #00d4ff; color: #0b0e14; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 40px; cursor: pointer; margin-top: 10px; }
         .preview { background: #0f121c; border: 1px dashed #00d4ff; border-radius: 20px; padding: 15px; margin: 20px 0; }
-        .post-item, .usuario-item, .seccion-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
-        .post-item button, .seccion-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; display: inline-block; margin-right: 8px; }
-        .post-item button.editar { background: #ffaa00; }
-        .seccion-item button.editar { background: #ffaa00; }
+        .post-item, .usuario-item, .categoria-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
+        .post-item button, .categoria-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; display: inline-block; margin-right: 8px; }
+        .post-item button.editar, .categoria-item button.editar { background: #ffaa00; }
         .seccion { background: #0f121c; border-radius: 20px; padding: 20px; margin-bottom: 30px; }
         .error { color: #ff8888; background: #330000; padding: 10px; border-radius: 12px; margin-top: 10px; }
         .exito { color: #88ff88; background: #003300; padding: 10px; border-radius: 12px; }
@@ -32,7 +31,6 @@
         .credito { text-align: center; font-size: 0.7rem; color: #555; margin-top: 10px; margin-bottom: 20px; }
         .modal-editar { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 2000; }
         .modal-editar-content { background: #1a1f2a; padding: 25px; border-radius: 20px; width: 90%; max-width: 500px; border: 1px solid #00d4ff; max-height: 90%; overflow-y: auto; }
-        .modal-editar-content input, .modal-editar-content select, .modal-editar-content textarea { margin: 8px 0; }
     </style>
     <script>
         let deferredPrompt;
@@ -70,9 +68,7 @@
             } else {
                 renderLogin();
             }
-        } catch(e) {
-            renderLogin();
-        }
+        } catch(e) { renderLogin(); }
     }
 
     async function cargarConfiguracionInicial() {
@@ -81,10 +77,7 @@
             const cfg = await res.json();
             window.botTokenActual = cfg.bot_token || '';
             window.adminIdActual = cfg.admin_telegram_id || '';
-        } catch(e) {
-            window.botTokenActual = '';
-            window.adminIdActual = '';
-        }
+        } catch(e) {}
     }
 
     function renderLogin() {
@@ -120,151 +113,176 @@
     };
 
     window.logout = async function() {
-        try {
-            await fetch('/api/admin/logout', { method: 'POST' });
-        } catch(e) {}
+        try { await fetch('/api/admin/logout', { method: 'POST' }); } catch(e) {}
         logged = false;
         localStorage.removeItem('acaes_admin_nombre');
         sessionStorage.clear();
         renderLogin();
     };
 
-    let secciones = [];
+    // Categorías (para selector y gestión)
+    let categoriasArbol = [];
 
-    async function cargarSecciones() {
+    async function cargarCategoriasSelect() {
         try {
-            const res = await fetch('/api/secciones');
-            secciones = await res.json();
-        } catch(e) { secciones = []; }
-        const div = document.getElementById('listaSecciones');
-        if (!secciones || !secciones.length) { div.innerHTML = '<p>Sin secciones</p>'; return; }
-        div.innerHTML = secciones.map(sec => `
-            <div class="seccion-item">
-                <strong>${escapeHtml(sec.nombre)}</strong> (slug: ${sec.slug}) - Orden: ${sec.orden}
-                <br>
-                <button class="editar" onclick="editarSeccion(${sec.id}, '${escapeHtml(sec.nombre)}', '${sec.slug}', ${sec.orden})">✏️ Editar</button>
-                <button onclick="eliminarSeccion(${sec.id})">🗑️ Eliminar</button>
-            </div>
-        `).join('');
+            const res = await fetch('/api/categorias');
+            categoriasArbol = await res.json();
+            const select = document.getElementById('categoriaSelect');
+            if (!select) return;
+            select.innerHTML = '<option value="">Sin categoría</option>';
+            function agregarOpciones(cats, nivel = 0) {
+                cats.forEach(cat => {
+                    const prefix = '—'.repeat(nivel);
+                    select.innerHTML += `<option value="${cat.id}">${prefix} ${cat.nombre}</option>`;
+                    if (cat.hijos && cat.hijos.length) agregarOpciones(cat.hijos, nivel + 1);
+                });
+            }
+            agregarOpciones(categoriasArbol);
+        } catch(e) {}
     }
 
-    window.mostrarFormNuevaSeccion = function() {
-        document.getElementById('formSeccion').style.display = 'block';
-        document.getElementById('seccionId').value = '';
-        document.getElementById('seccionNombre').value = '';
-        document.getElementById('seccionSlug').value = '';
-        document.getElementById('seccionOrden').value = '0';
+    async function cargarListaCategorias() {
+        try {
+            const res = await fetch('/api/categorias');
+            const cats = await res.json();
+            const div = document.getElementById('listaCategorias');
+            if (!div) return;
+            function renderCats(lista, nivel = 0) {
+                let html = '';
+                lista.forEach(cat => {
+                    html += `<div class="categoria-item" style="margin-left: ${nivel * 20}px">
+                        <strong>${escapeHtml(cat.nombre)}</strong> (slug: ${cat.slug})
+                        <br>
+                        <button class="editar" onclick="editarCategoria(${cat.id}, '${escapeHtml(cat.nombre)}', '${cat.slug}', ${cat.padre_id || 0})">✏️ Editar</button>
+                        <button onclick="eliminarCategoria(${cat.id})">🗑️ Eliminar</button>
+                    </div>`;
+                    if (cat.hijos && cat.hijos.length) html += renderCats(cat.hijos, nivel + 1);
+                });
+                return html;
+            }
+            div.innerHTML = renderCats(cats) || '<p>No hay categorías</p>';
+        } catch(e) {}
+    }
+
+    window.mostrarFormNuevaCategoria = function() {
+        document.getElementById('formCategoria').style.display = 'block';
+        document.getElementById('catId').value = '';
+        document.getElementById('catNombre').value = '';
+        document.getElementById('catSlug').value = '';
+        document.getElementById('catPadre').value = '0';
+        document.getElementById('catOrden').value = '0';
+        // llenar select de padres
+        const selectPadre = document.getElementById('catPadreSelect');
+        selectPadre.innerHTML = '<option value="0">Ninguna (raíz)</option>';
+        function agregarPadres(cats, nivel = 0) {
+            cats.forEach(cat => {
+                selectPadre.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${cat.nombre}</option>`;
+                if (cat.hijos && cat.hijos.length) agregarPadres(cat.hijos, nivel + 1);
+            });
+        }
+        agregarPadres(categoriasArbol);
     };
 
-    window.guardarSeccion = async function() {
-        const id = document.getElementById('seccionId').value;
-        const nombre = document.getElementById('seccionNombre').value.trim();
-        const slug = document.getElementById('seccionSlug').value.trim().toLowerCase().replace(/ /g, '_');
-        const orden = parseInt(document.getElementById('seccionOrden').value) || 0;
-        
-        if (!nombre || !slug) {
-            alert('Nombre y slug requeridos');
-            return;
-        }
-        
-        const url = id ? `/api/admin/secciones/${id}` : '/api/admin/secciones';
+    window.guardarCategoria = async function() {
+        const id = document.getElementById('catId').value;
+        const nombre = document.getElementById('catNombre').value.trim();
+        const slug = document.getElementById('catSlug').value.trim().toLowerCase().replace(/ /g, '_');
+        const padre_id = parseInt(document.getElementById('catPadreSelect').value);
+        const orden = parseInt(document.getElementById('catOrden').value) || 0;
+        if (!nombre || !slug) { alert('Nombre y slug requeridos'); return; }
+        const url = id ? `/api/admin/categorias/${id}` : '/api/admin/categorias';
         const method = id ? 'PUT' : 'POST';
-        
         try {
             const res = await fetch(url, {
-                method: method,
+                method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nombre, slug, orden })
+                body: JSON.stringify({ nombre, slug, padre_id, orden })
             });
             if (res.ok) {
-                document.getElementById('formSeccion').style.display = 'none';
-                cargarSecciones();
-                cargarSeccionesSelect();
+                document.getElementById('formCategoria').style.display = 'none';
+                cargarListaCategorias();
+                cargarCategoriasSelect();
+                cargarCategoriasSelectEdicion(); // para edición de posts
             } else {
                 const data = await res.json();
                 alert('Error: ' + data.error);
             }
-        } catch(e) {
-            alert('Error de conexión');
-        }
+        } catch(e) { alert('Error de conexión'); }
     };
 
-    window.editarSeccion = function(id, nombre, slug, orden) {
-        document.getElementById('formSeccion').style.display = 'block';
-        document.getElementById('seccionId').value = id;
-        document.getElementById('seccionNombre').value = nombre;
-        document.getElementById('seccionSlug').value = slug;
-        document.getElementById('seccionOrden').value = orden;
+    window.editarCategoria = function(id, nombre, slug, padre_id) {
+        cargarCategoriasSelect(); // asegurar árbol
+        setTimeout(() => {
+            document.getElementById('formCategoria').style.display = 'block';
+            document.getElementById('catId').value = id;
+            document.getElementById('catNombre').value = nombre;
+            document.getElementById('catSlug').value = slug;
+            document.getElementById('catPadreSelect').value = padre_id;
+            document.getElementById('catOrden').value = '0';
+        }, 100);
     };
 
-    window.eliminarSeccion = async function(id) {
-        if (!confirm('¿Eliminar esta sección?')) return;
+    window.eliminarCategoria = async function(id) {
+        if (!confirm('¿Eliminar categoría y todas sus subcategorías?')) return;
         try {
-            const res = await fetch(`/api/admin/secciones/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/admin/categorias/${id}`, { method: 'DELETE' });
             if (res.ok) {
-                cargarSecciones();
-                cargarSeccionesSelect();
-            } else {
-                alert('Error al eliminar');
-            }
-        } catch(e) {
-            alert('Error de conexión');
-        }
+                cargarListaCategorias();
+                cargarCategoriasSelect();
+                cargarCategoriasSelectEdicion();
+            } else alert('Error');
+        } catch(e) { alert('Error'); }
     };
 
-    async function cargarSeccionesSelect() {
+    // Edición de publicaciones (similar a antes, pero con categorías)
+    async function cargarCategoriasSelectEdicion() {
         try {
-            const res = await fetch('/api/secciones');
-            const secciones = await res.json();
-            const select = document.getElementById('seccionSelect');
-            if (select) {
-                select.innerHTML = '<option value="">Sin sección</option>';
-                secciones.forEach(sec => {
-                    select.innerHTML += `<option value="${sec.id}">${escapeHtml(sec.nombre)}</option>`;
+            const res = await fetch('/api/categorias');
+            const cats = await res.json();
+            const select = document.getElementById('editCategoria');
+            if (!select) return;
+            select.innerHTML = '<option value="">Sin categoría</option>';
+            function addOpts(lista, nivel = 0) {
+                lista.forEach(cat => {
+                    select.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${cat.nombre}</option>`;
+                    if (cat.hijos) addOpts(cat.hijos, nivel + 1);
                 });
             }
+            addOpts(cats);
         } catch(e) {}
     }
 
-    // Editar publicación
     window.editarPost = async function(id) {
         try {
             const res = await fetch(`/api/posts/${id}`);
             const post = await res.json();
-            
+            await cargarCategoriasSelectEdicion();
             const modal = document.createElement('div');
             modal.className = 'modal-editar';
-            modal.id = 'modalEditar';
             modal.innerHTML = `
                 <div class="modal-editar-content">
                     <h3>✏️ Editar Publicación</h3>
                     <input type="text" id="editTitulo" value="${escapeHtml(post.titulo)}" placeholder="Título">
-                    <textarea id="editContenido" rows="3" placeholder="Descripción">${escapeHtml(post.contenido || '')}</textarea>
+                    <textarea id="editContenido" rows="3">${escapeHtml(post.contenido || '')}</textarea>
                     <select id="editTipo">
                         <option value="Noticia" ${post.tipo === 'Noticia' ? 'selected' : ''}>📰 Noticia</option>
                         <option value="Investigacion" ${post.tipo === 'Investigacion' ? 'selected' : ''}>🔬 Investigación</option>
                         <option value="Avistamiento" ${post.tipo === 'Avistamiento' ? 'selected' : ''}>🔭 Avistamiento</option>
                     </select>
-                    <select id="editSeccion">
-                        <option value="">Sin sección</option>
-                        ${secciones.map(sec => `<option value="${sec.id}" ${post.seccion_id == sec.id ? 'selected' : ''}>${escapeHtml(sec.nombre)}</option>`).join('')}
+                    <select id="editCategoria">
+                        <option value="">Sin categoría</option>
                     </select>
                     <input type="text" id="editEnlace" value="${escapeHtml(post.enlace_externo || '')}" placeholder="Enlace externo">
                     <input type="file" id="editArchivo" accept="image/*,application/pdf">
-                    <p style="font-size:0.7rem; color:#888;">Si subís un nuevo archivo, reemplazará al anterior</p>
-                    <button onclick="guardarEdicion(${id})">💾 Guardar cambios</button>
-                    <button onclick="cerrarModalEditar()" style="background:#ff4444;">Cancelar</button>
+                    <p style="font-size:0.7rem;">Si subes archivo, reemplazará al anterior</p>
+                    <button onclick="guardarEdicion(${id})">💾 Guardar</button>
+                    <button onclick="this.closest('.modal-editar').remove()" style="background:#ff4444;">Cancelar</button>
                 </div>
             `;
             document.body.appendChild(modal);
-        } catch(e) {
-            alert('Error al cargar publicación');
-        }
-    };
-
-    window.cerrarModalEditar = function() {
-        const modal = document.getElementById('modalEditar');
-        if(modal) modal.remove();
+            const selectCat = document.getElementById('editCategoria');
+            if (post.categoria_id) selectCat.value = post.categoria_id;
+        } catch(e) { alert('Error al cargar publicación'); }
     };
 
     window.guardarEdicion = async function(id) {
@@ -272,42 +290,35 @@
         formData.append('titulo', document.getElementById('editTitulo').value);
         formData.append('contenido', document.getElementById('editContenido').value);
         formData.append('tipo', document.getElementById('editTipo').value);
-        formData.append('seccion_id', document.getElementById('editSeccion').value);
+        formData.append('categoria_id', document.getElementById('editCategoria').value);
         formData.append('enlace_externo', document.getElementById('editEnlace').value);
         formData.append('userAdmin', userAdmin);
         const archivo = document.getElementById('editArchivo').files[0];
         if(archivo) formData.append('archivo', archivo);
-        
         try {
             const res = await fetch(`/api/posts/${id}`, { method: 'PUT', body: formData });
-            const data = await res.json();
             if(res.ok) {
-                alert('✅ Publicación actualizada');
-                cerrarModalEditar();
+                alert('✅ Actualizada');
+                document.querySelector('.modal-editar')?.remove();
                 cargarListaPosts();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        } catch(e) {
-            alert('Error de conexión');
-        }
+            } else alert('Error');
+        } catch(e) { alert('Error'); }
     };
 
+    // Render principal
     async function renderPanel() {
         const html = `
             <h2>🛸 Panel de Control ACAES</h2>
             <button onclick="logout()" style="background:#ff4444; margin-bottom:20px;">🚪 Cerrar sesión</button>
-            
             <div class="tabs">
                 <div class="tab activo" onclick="mostrarTab('publicar')">📝 Publicar</div>
-                <div class="tab" onclick="mostrarTab('secciones')">📁 Secciones</div>
+                <div class="tab" onclick="mostrarTab('categorias')">📁 Categorías</div>
                 <div class="tab" onclick="mostrarTab('bot')">🤖 Bot Telegram</div>
                 <div class="tab" onclick="mostrarTab('config')">⚙️ Configuración</div>
                 <div class="tab" onclick="mostrarTab('usuarios')">👥 Usuarios</div>
                 <div class="tab" onclick="mostrarTab('suscriptores')">📡 Suscriptores</div>
                 <div class="tab" onclick="mostrarTab('posts')">📋 Publicaciones</div>
             </div>
-            
             <div id="tab-publicar" class="tab-content activo">
                 <div class="seccion">
                     <h3>📝 Nueva publicación</h3>
@@ -319,98 +330,68 @@
                             <option value="Investigacion">🔬 Investigación</option>
                             <option value="Avistamiento">🔭 Avistamiento</option>
                         </select>
-                        <select id="seccionSelect">
-                            <option value="">Sin sección</option>
-                        </select>
+                        <select id="categoriaSelect"></select>
                         <input type="text" id="enlace_externo" placeholder="Enlace externo">
                         <input type="file" id="archivo" accept="image/*,application/pdf">
-                        <button type="submit">🚀 PUBLICAR Y ENVIAR A TODOS</button>
+                        <button type="submit">🚀 PUBLICAR</button>
                     </form>
                     <div class="preview"><strong>Vista previa:</strong><div id="previewContent"></div></div>
                 </div>
             </div>
-            
-            <div id="tab-secciones" class="tab-content">
+            <div id="tab-categorias" class="tab-content">
                 <div class="seccion">
-                    <h3>📁 Gestionar Secciones</h3>
-                    <button onclick="mostrarFormNuevaSeccion()" style="background:#00d4ff; margin-bottom:15px;">+ Nueva Sección</button>
-                    <div id="listaSecciones">Cargando...</div>
-                    <div id="formSeccion" style="display:none; margin-top:20px; padding:15px; background:#1a1f2a; border-radius:12px;">
-                        <h4>Formulario Sección</h4>
-                        <input type="hidden" id="seccionId">
-                        <input type="text" id="seccionNombre" placeholder="Nombre (ej: Astrofísica)">
-                        <input type="text" id="seccionSlug" placeholder="Slug (ej: astrofisica)">
-                        <input type="number" id="seccionOrden" placeholder="Orden (1,2,3...)" value="0">
-                        <button onclick="guardarSeccion()">Guardar Sección</button>
-                        <button onclick="document.getElementById('formSeccion').style.display='none'">Cancelar</button>
+                    <h3>📁 Gestionar Categorías</h3>
+                    <button onclick="mostrarFormNuevaCategoria()" style="background:#00d4ff; margin-bottom:15px;">+ Nueva Categoría</button>
+                    <div id="listaCategorias">Cargando...</div>
+                    <div id="formCategoria" style="display:none; margin-top:20px; padding:15px; background:#1a1f2a; border-radius:12px;">
+                        <h4>Formulario Categoría</h4>
+                        <input type="hidden" id="catId">
+                        <input type="text" id="catNombre" placeholder="Nombre">
+                        <input type="text" id="catSlug" placeholder="slug (ej: mejores-imagenes)">
+                        <select id="catPadreSelect"></select>
+                        <input type="number" id="catOrden" placeholder="Orden" value="0">
+                        <button onclick="guardarCategoria()">Guardar</button>
+                        <button onclick="document.getElementById('formCategoria').style.display='none'">Cancelar</button>
                     </div>
                 </div>
             </div>
-            
             <div id="tab-bot" class="tab-content">
                 <div class="seccion">
-                    <h3>🤖 Configuración del Bot de Telegram</h3>
-                    <label>Token del Bot:</label>
-                    <input type="text" id="botToken" placeholder="Token del bot">
-                    <label>Tu ID de Telegram (admin):</label>
-                    <input type="text" id="adminId" placeholder="Ej: 7501019675">
-                    <button onclick="guardarConfigBot()">Guardar configuración del Bot</button>
+                    <h3>🤖 Configuración Bot</h3>
+                    <label>Token:</label><input type="text" id="botToken">
+                    <label>ID Admin:</label><input type="text" id="adminId">
+                    <button onclick="guardarConfigBot()">Guardar</button>
                     <div id="msgBot"></div>
                     <hr>
-                    <p><strong>📌 Configurar Webhook (una sola vez):</strong></p>
                     <button onclick="configurarWebhook()">Configurar Webhook</button>
                     <div id="msgWebhook"></div>
                 </div>
             </div>
-            
             <div id="tab-config" class="tab-content">
                 <div class="seccion">
-                    <h3>⚙️ Configuración General</h3>
-                    <label>WhatsApp (solo números):</label>
-                    <input type="text" id="whatsappNumero" placeholder="584241234567">
+                    <h3>⚙️ Configuración</h3>
+                    <label>WhatsApp:</label><input type="text" id="whatsappNumero">
                     <button onclick="actualizarWhatsApp()">Actualizar WhatsApp</button>
                     <div id="msgWhatsapp"></div>
                     <hr>
-                    <label>Cambiar contraseña admin:</label>
-                    <input type="password" id="nuevaPass" placeholder="Nueva contraseña">
+                    <label>Nueva contraseña admin:</label><input type="password" id="nuevaPass">
                     <button onclick="cambiarPass()">Cambiar contraseña</button>
                     <div id="msgPass"></div>
                 </div>
             </div>
-            
-            <div id="tab-usuarios" class="tab-content">
-                <div class="seccion">
-                    <h3>👥 Usuarios registrados en la web</h3>
-                    <div id="listaUsuarios">Cargando...</div>
-                </div>
-            </div>
-            
-            <div id="tab-suscriptores" class="tab-content">
-                <div class="seccion">
-                    <h3>📡 Suscriptores de Telegram</h3>
-                    <div id="listaSuscriptores">Cargando...</div>
-                </div>
-            </div>
-            
-            <div id="tab-posts" class="tab-content">
-                <div class="seccion">
-                    <h3>📋 Publicaciones (${userAdmin})</h3>
-                    <div id="listaPosts">Cargando...</div>
-                </div>
-            </div>
+            <div id="tab-usuarios" class="tab-content"><div class="seccion"><h3>👥 Usuarios</h3><div id="listaUsuarios"></div></div></div>
+            <div id="tab-suscriptores" class="tab-content"><div class="seccion"><h3>📡 Suscriptores</h3><div id="listaSuscriptores"></div></div></div>
+            <div id="tab-posts" class="tab-content"><div class="seccion"><h3>📋 Publicaciones</h3><div id="listaPosts"></div></div></div>
         `;
         document.getElementById('app').innerHTML = html;
-        
-        await cargarSecciones();
-        await cargarSeccionesSelect();
+        await cargarCategoriasSelect();
+        await cargarListaCategorias();
         await cargarListaPosts();
         await cargarUsuarios();
         await cargarSuscriptores();
         await cargarWhatsAppActual();
-        
         if (window.botTokenActual) document.getElementById('botToken').value = window.botTokenActual;
         if (window.adminIdActual) document.getElementById('adminId').value = window.adminIdActual;
-        
         actualizarVistaPrevia();
         document.getElementById('formPublicar').onsubmit = publicar;
         document.getElementById('titulo').addEventListener('input', actualizarVistaPrevia);
@@ -424,187 +405,84 @@
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('activo'));
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('activo'));
         document.getElementById(`tab-${tab}`).classList.add('activo');
-        if(event && event.target) event.target.classList.add('activo');
+        event.target.classList.add('activo');
     };
 
     async function cargarWhatsAppActual() {
         try {
             const res = await fetch('/api/config');
             const cfg = await res.json();
-            if(document.getElementById('whatsappNumero')) {
-                document.getElementById('whatsappNumero').value = cfg.whatsapp;
-            }
+            if(document.getElementById('whatsappNumero')) document.getElementById('whatsappNumero').value = cfg.whatsapp;
         } catch(e) {}
     }
-
     window.actualizarWhatsApp = async function() {
         const numero = document.getElementById('whatsappNumero').value;
-        if(!numero.match(/^[0-9]{10,15}$/)) {
-            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>';
-            return;
-        }
-        try {
-            const res = await fetch('/api/config/whatsapp', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ numero })
-            });
-            if(res.ok) {
-                document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ WhatsApp actualizado</div>';
-            } else {
-                document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
-            }
-        } catch(e) {
-            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error de conexión</div>';
-        }
+        if(!numero.match(/^[0-9]{10,15}$/)) { document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>'; return; }
+        const res = await fetch('/api/config/whatsapp', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ numero }) });
+        if(res.ok) document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ Actualizado</div>';
+        else document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
     };
-
     window.guardarConfigBot = async function() {
         const token = document.getElementById('botToken').value.trim();
         const adminId = document.getElementById('adminId').value.trim();
-        
-        if (!token) {
-            document.getElementById('msgBot').innerHTML = '<div class="error">Token requerido</div>';
-            return;
-        }
-        
-        try {
-            let res1 = await fetch('/api/admin/bot_token', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ token })
-            });
-            
-            let res2 = { ok: true };
-            if (adminId) {
-                res2 = await fetch('/api/admin/admin_id', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ id: adminId })
-                });
-            }
-            
-            if (res1.ok && res2.ok) {
-                window.botTokenActual = token;
-                window.adminIdActual = adminId;
-                document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Configuración guardada</div>';
-            } else {
-                document.getElementById('msgBot').innerHTML = '<div class="error">Error al guardar</div>';
-            }
-        } catch(e) {
-            document.getElementById('msgBot').innerHTML = '<div class="error">Error de conexión</div>';
-        }
+        if(!token) { document.getElementById('msgBot').innerHTML = '<div class="error">Token requerido</div>'; return; }
+        let res1 = await fetch('/api/admin/bot_token', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token }) });
+        let res2 = { ok: true };
+        if (adminId) res2 = await fetch('/api/admin/admin_id', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: adminId }) });
+        if(res1.ok && res2.ok) { window.botTokenActual = token; window.adminIdActual = adminId; document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Guardado</div>'; }
+        else document.getElementById('msgBot').innerHTML = '<div class="error">Error</div>';
     };
-
     window.configurarWebhook = async function() {
         const token = document.getElementById('botToken').value.trim();
-        if (!token) {
-            document.getElementById('msgWebhook').innerHTML = '<div class="error">Primero guardá el token</div>';
-            return;
-        }
+        if(!token) { document.getElementById('msgWebhook').innerHTML = '<div class="error">Primero guarda token</div>'; return; }
         const urlActual = window.location.origin;
-        const webhookUrl = `${urlActual}/webhook`;
-        
         try {
-            const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
+            const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${urlActual}/webhook`);
             const data = await res.json();
-            if (data.ok) {
-                document.getElementById('msgWebhook').innerHTML = '<div class="exito">✅ Webhook configurado correctamente</div>';
-            } else {
-                document.getElementById('msgWebhook').innerHTML = `<div class="error">Error: ${data.description}</div>`;
-            }
-        } catch(e) {
-            document.getElementById('msgWebhook').innerHTML = '<div class="error">Error de conexión</div>';
-        }
+            if(data.ok) document.getElementById('msgWebhook').innerHTML = '<div class="exito">✅ Webhook configurado</div>';
+            else document.getElementById('msgWebhook').innerHTML = `<div class="error">Error: ${data.description}</div>`;
+        } catch(e) { document.getElementById('msgWebhook').innerHTML = '<div class="error">Error de conexión</div>'; }
     };
-
     window.cambiarPass = async function() {
         const nuevaPass = document.getElementById('nuevaPass').value;
-        if(nuevaPass.length < 4) {
-            document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>';
-            return;
-        }
-        try {
-            const res = await fetch('/api/admin/cambiar_pass', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ nuevaPass })
-            });
-            if(res.ok) {
-                document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>';
-                document.getElementById('nuevaPass').value = '';
-            } else {
-                document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
-            }
-        } catch(e) {
-            document.getElementById('msgPass').innerHTML = '<div class="error">Error de conexión</div>';
-        }
+        if(nuevaPass.length<4) { document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>'; return; }
+        const res = await fetch('/api/admin/cambiar_pass', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nuevaPass }) });
+        if(res.ok) { document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>'; document.getElementById('nuevaPass').value=''; }
+        else document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
     };
-
     async function cargarListaPosts() {
-        try {
-            const res = await fetch('/api/posts');
-            const posts = await res.json();
-            const div = document.getElementById('listaPosts');
-            if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
-            div.innerHTML = posts.map(post => `
-                <div class="post-item">
-                    <strong>${escapeHtml(post.titulo)}</strong><br>
-                    <small>${post.tipo} | ${post.seccion_nombre ? post.seccion_nombre + ' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
-                    <button class="editar" onclick="editarPost(${post.id})">✏️ Editar</button>
-                    <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
-                </div>
-            `).join('');
-        } catch(e) {
-            document.getElementById('listaPosts').innerHTML = '<p>Error al cargar</p>';
-        }
+        const res = await fetch('/api/posts');
+        const posts = await res.json();
+        const div = document.getElementById('listaPosts');
+        if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
+        div.innerHTML = posts.map(post => `
+            <div class="post-item">
+                <strong>${escapeHtml(post.titulo)}</strong><br>
+                <small>${post.tipo} | ${post.categoria_nombre ? post.categoria_nombre+' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
+                <button class="editar" onclick="editarPost(${post.id})">✏️ Editar</button>
+                <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
+            </div>
+        `).join('');
     }
-
     async function cargarUsuarios() {
-        try {
-            const res = await fetch('/api/admin/usuarios');
-            const usuarios = await res.json();
-            const div = document.getElementById('listaUsuarios');
-            if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
-            div.innerHTML = usuarios.map(u => `
-                <div class="usuario-item">
-                    <strong>${escapeHtml(u.nombre)}</strong><br>
-                    📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip || 'desconocida'}
-                </div>
-            `).join('');
-        } catch(e) {
-            document.getElementById('listaUsuarios').innerHTML = '<p>Error al cargar</p>';
-        }
+        const res = await fetch('/api/admin/usuarios');
+        const usuarios = await res.json();
+        const div = document.getElementById('listaUsuarios');
+        if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
+        div.innerHTML = usuarios.map(u => `<div class="usuario-item"><strong>${escapeHtml(u.nombre)}</strong><br>📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip||'desconocida'}</div>`).join('');
     }
-
     async function cargarSuscriptores() {
-        try {
-            const res = await fetch('/api/admin/suscriptores');
-            const subs = await res.json();
-            const div = document.getElementById('listaSuscriptores');
-            if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot.</p>'; return; }
-            div.innerHTML = subs.map(s => `
-                <div class="usuario-item">
-                    🤖 ${s.nombre || 'Usuario'} ${s.username ? '@'+s.username : ''}<br>
-                    📅 ${new Date(s.fecha_suscripcion).toLocaleString()}
-                </div>
-            `).join('');
-        } catch(e) {
-            document.getElementById('listaSuscriptores').innerHTML = '<p>Error al cargar</p>';
-        }
+        const res = await fetch('/api/admin/suscriptores');
+        const subs = await res.json();
+        const div = document.getElementById('listaSuscriptores');
+        if(!subs.length) { div.innerHTML = '<p>Sin suscriptores</p>'; return; }
+        div.innerHTML = subs.map(s => `<div class="usuario-item">🤖 ${s.nombre||'Usuario'} ${s.username?'@'+s.username:''}<br>📅 ${new Date(s.fecha_suscripcion).toLocaleString()}</div>`).join('');
     }
-
     window.eliminarPost = async function(id) {
         if(!confirm('¿Eliminar publicación?')) return;
-        try {
-            const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
-            if(res.ok) {
-                alert('✅ Publicación eliminada');
-                cargarListaPosts();
-            }
-        } catch(e) {}
+        const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+        if(res.ok) { alert('Eliminada'); cargarListaPosts(); }
     };
-
     function actualizarVistaPrevia() {
         const titulo = document.getElementById('titulo')?.value || 'Sin título';
         const tipo = document.getElementById('tipo')?.value || '';
@@ -618,47 +496,27 @@
         const preview = document.getElementById('previewContent');
         if(preview) preview.innerHTML = html;
     }
-
     async function publicar(e) {
         e.preventDefault();
         const formData = new FormData();
         formData.append('titulo', document.getElementById('titulo').value);
         formData.append('contenido', document.getElementById('contenido').value);
         formData.append('tipo', document.getElementById('tipo').value);
-        formData.append('seccion_id', document.getElementById('seccionSelect').value);
+        formData.append('categoria_id', document.getElementById('categoriaSelect').value);
         formData.append('enlace_externo', document.getElementById('enlace_externo').value);
         formData.append('userAdmin', userAdmin);
         const archivo = document.getElementById('archivo').files[0];
         if(archivo) formData.append('archivo', archivo);
-        
         const btn = document.querySelector('#formPublicar button');
-        btn.disabled = true;
-        btn.innerText = '🛰️ Enviando a todos...';
-        
+        btn.disabled = true; btn.innerText = '🛰️ Publicando...';
         try {
             const res = await fetch('/api/publicar', { method: 'POST', body: formData });
-            const data = await res.json();
-            if(res.ok) {
-                alert('✅ Publicado y enviado a todos los suscriptores');
-                document.getElementById('formPublicar').reset();
-                actualizarVistaPrevia();
-                cargarListaPosts();
-            } else {
-                throw new Error(data.error);
-            }
-        } catch(err) {
-            alert('❌ Error: ' + err.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerText = '🚀 PUBLICAR Y ENVIAR A TODOS';
-        }
+            if(res.ok) { alert('✅ Publicado'); document.getElementById('formPublicar').reset(); actualizarVistaPrevia(); cargarListaPosts(); }
+            else alert('Error');
+        } catch(e) { alert('Error'); }
+        finally { btn.disabled = false; btn.innerText = '🚀 PUBLICAR'; }
     }
-
-    function escapeHtml(str) { 
-        if(!str) return '';
-        return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';});
-    }
-    
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m=> m==='&'?'&amp;': m==='<'?'&lt;':'&gt;'); }
     checkAuth();
 </script>
 </body>
