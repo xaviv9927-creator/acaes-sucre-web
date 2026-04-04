@@ -2,89 +2,190 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACAES Sucre | Astronomía</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>ACAES | Asociación de Ciencias Astronómicas del Estado Sucre</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, sans-serif; }
+        body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
         .header { background: #0a0c10; padding: 20px; border-bottom: 2px solid #00d4ff; text-align: center; }
-        h1 { font-size: 1.8rem; }
-        .sub { color: #00d4ff; font-size: 0.8rem; }
+        h1 { font-size: 1.5rem; letter-spacing: 1px; }
+        .sub { color: #00d4ff; font-size: 0.7rem; margin-top: 5px; }
         .hamburguesa { font-size: 32px; cursor: pointer; padding: 15px; display: inline-block; color: #00d4ff; }
         nav { background: #11141c; display: none; flex-direction: column; padding: 10px; }
         nav a { color: white; text-decoration: none; padding: 12px; border-bottom: 1px solid #2a2f3a; }
         .feed { padding: 15px; max-width: 800px; margin: auto; }
-        .post { background: #12161f; border: 1px solid #00d4ff; border-radius: 16px; margin-bottom: 25px; padding: 18px; }
-        .post h3 { color: #00d4ff; margin-bottom: 10px; }
-        .post img, .post video { max-width: 100%; border-radius: 12px; margin: 12px 0; }
-        .tipo { font-size: 0.7rem; background: #1e2a3a; display: inline-block; padding: 4px 12px; border-radius: 20px; }
-        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25D366; border-radius: 50%; padding: 14px; text-decoration: none; font-size: 28px; box-shadow: 0 2px 10px black; }
+        .post { background: #12161f; border: 1px solid #00d4ff; border-radius: 16px; margin-bottom: 25px; padding: 18px; transition: 0.2s; }
+        .post h3 { color: #00d4ff; margin-bottom: 10px; font-size: 1.3rem; }
+        .post img { max-width: 100%; border-radius: 12px; margin: 12px 0; border: 1px solid #2a3a55; cursor: pointer; }
+        .post a { color: #00d4ff; text-decoration: none; }
+        .tipo { font-size: 0.7rem; background: #1e2a3a; display: inline-block; padding: 4px 12px; border-radius: 20px; margin-bottom: 10px; }
+        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25D366; border-radius: 50%; padding: 14px; text-decoration: none; font-size: 28px; box-shadow: 0 2px 10px black; z-index: 1000; }
         .loader { text-align: center; padding: 40px; color: #00d4ff; }
-        @media (max-width: 600px) { .post { padding: 12px; } h1 { font-size: 1.4rem; } }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .modal-content { background: #1a1f2a; padding: 25px; border-radius: 20px; width: 90%; max-width: 350px; border: 1px solid #00d4ff; }
+        .modal-content h3 { color: #00d4ff; margin-bottom: 15px; }
+        .modal-content input { width: 100%; margin: 10px 0; padding: 12px; background: #0b0e14; border: 1px solid #00d4ff; color: white; border-radius: 10px; }
+        .modal-content button { background: #00d4ff; color: #0b0e14; border: none; padding: 12px; width: 100%; border-radius: 40px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .mensaje-bienvenida { background: #00d4ff22; border-left: 3px solid #00d4ff; padding: 10px 15px; margin: 10px; border-radius: 8px; font-size: 0.9rem; text-align: center; }
+        .cerrar-modal { background: #ff4444 !important; margin-top: 5px; }
+        small { color: #888; font-size: 0.7rem; }
+        @media (max-width: 600px) { .post { padding: 12px; } h1 { font-size: 1.2rem; } }
     </style>
 </head>
 <body>
 <div class="hamburguesa" onclick="toggleMenu()">☰</div>
 <nav id="menu">
     <a href="/">Inicio</a>
-    <a href="/admin_acaes.html">Panel Admin</a>
-    <a href="https://t.me/acaeslacertanotifica">Canal TG</a>
+    <a href="/admin">Panel Admin</a>
+    <a href="https://t.me/acaeslacertanotifica" target="_blank">Canal TG</a>
 </nav>
 <div class="header">
-    <h1>🔭 ACAES SUCRE</h1>
-    <div class="sub">Nodo Astronómico Regional</div>
+    <h1>🔭 ACAES</h1>
+    <div class="sub">Asociación de Ciencias Astronómicas del Estado Sucre</div>
 </div>
-<div id="feed" class="feed"><div class="loader">Cargando...</div></div>
+<div id="mensajeBienvenida" class="mensaje-bienvenida"></div>
+<div id="feed" class="feed"><div class="loader">Cargando constelaciones...</div></div>
 <a id="wsLink" class="ws-float">💬</a>
 
 <script>
+    let usuarioActual = null;
     let whatsappNumero = '584240000000';
 
     async function cargarConfig() {
-        const res = await fetch('/api/config');
-        const cfg = await res.json();
-        whatsappNumero = cfg.whatsapp;
-        document.getElementById('wsLink').href = `https://wa.me/${whatsappNumero}?text=Hola%20ACAES`;
+        try {
+            const res = await fetch('/api/config');
+            const cfg = await res.json();
+            whatsappNumero = cfg.whatsapp;
+            document.getElementById('wsLink').href = `https://wa.me/${whatsappNumero}?text=Hola%20ACAES`;
+        } catch(e) { console.log('Error config:', e); }
     }
+
+    async function verificarRegistro() {
+        const nombreGuardado = localStorage.getItem('acaes_usuario');
+        if (nombreGuardado) {
+            try {
+                const res = await fetch(`/api/usuario/${encodeURIComponent(nombreGuardado)}`);
+                const data = await res.json();
+                if (data.exists) {
+                    usuarioActual = data.user;
+                    document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido de vuelta, ${escapeHtml(nombreGuardado)}! 🌟`;
+                    return true;
+                } else {
+                    localStorage.removeItem('acaes_usuario');
+                }
+            } catch(e) { console.log(e); }
+        }
+        mostrarModalRegistro();
+        return false;
+    }
+
+    function mostrarModalRegistro() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'modalRegistro';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>📝 Regístrate en ACAES</h3>
+                <p style="font-size:0.8rem; margin-bottom:10px;">Para recibir notificaciones y novedades</p>
+                <input type="text" id="regNombre" placeholder="Tu nombre *" autocomplete="off">
+                <input type="email" id="regEmail" placeholder="Email (opcional)" autocomplete="off">
+                <button onclick="registrarUsuario()">📡 Registrarme</button>
+                <button class="cerrar-modal" onclick="cerrarModal()">Ahora no</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    window.cerrarModal = function() {
+        const modal = document.getElementById('modalRegistro');
+        if(modal) modal.remove();
+    };
+
+    window.registrarUsuario = async function() {
+        const nombre = document.getElementById('regNombre').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        
+        if (!nombre || nombre.length < 3) {
+            alert('El nombre debe tener al menos 3 letras');
+            return;
+        }
+        
+        try {
+            const res = await fetch('/api/registrar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                localStorage.setItem('acaes_usuario', nombre);
+                usuarioActual = { nombre, email };
+                document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido, ${escapeHtml(nombre)}! Tu registro ha sido exitoso 🌟`;
+                cerrarModal();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch(e) {
+            alert('Error de conexión');
+        }
+    };
 
     async function cargarPosts() {
         try {
             const res = await fetch('/api/posts');
+            if (!res.ok) throw new Error();
             const posts = await res.json();
             localStorage.setItem('feed_cache', JSON.stringify(posts));
             renderizarPosts(posts);
-        } catch(e) {
+        } catch (e) {
             const cache = localStorage.getItem('feed_cache');
-            if(cache) renderizarPosts(JSON.parse(cache));
-            else document.getElementById('feed').innerHTML = '<div class="post">⚠️ Sin conexión</div>';
+            if (cache) {
+                renderizarPosts(JSON.parse(cache));
+            } else {
+                document.getElementById('feed').innerHTML = '<div class="post">⚠️ Sin conexión. Reintentá más tarde.</div>';
+            }
         }
     }
 
     function renderizarPosts(posts) {
         const feedDiv = document.getElementById('feed');
-        if(!posts.length) {
-            feedDiv.innerHTML = '<div class="post">🌌 Sin publicaciones aún</div>';
+        if (!posts.length) {
+            feedDiv.innerHTML = '<div class="post">🌌 No hay publicaciones aún. Vuelve pronto.</div>';
             return;
         }
         feedDiv.innerHTML = posts.map(post => `
             <div class="post">
-                <span class="tipo">${post.tipo || 'Noticia'}</span>
+                <span class="tipo">${escapeHtml(post.tipo || 'Noticia')}</span>
                 <h3>${escapeHtml(post.titulo)}</h3>
                 ${post.contenido ? `<p>${escapeHtml(post.contenido)}</p>` : ''}
-                ${post.url_media && post.url_media.match(/\.(jpg|jpeg|png|webp)$/i) ? `<img src="${post.url_media}" loading="lazy" onclick="window.open(this.src)">` : ''}
-                ${post.url_media && post.url_media.match(/\.pdf$/i) ? `<a href="${post.url_media}" target="_blank">📄 Ver PDF</a>` : ''}
-                ${post.enlace_externo ? `<p>🔗 <a href="${post.enlace_externo}" target="_blank">Acceder</a></p>` : ''}
-                <small>📅 ${new Date(post.fecha_creacion).toLocaleString()}</small>
+                ${post.url_media && post.url_media.match(/\.(jpg|jpeg|png|webp)$/i) ? `<img src="${post.url_media}" loading="lazy" alt="multimedia" onclick="window.open(this.src)">` : ''}
+                ${post.url_media && post.url_media.match(/\.pdf$/i) ? `<p>📄 <a href="${post.url_media}" target="_blank">Ver PDF</a></p>` : ''}
+                ${post.enlace_externo ? `<p>🔗 <a href="${post.enlace_externo}" target="_blank" rel="noopener">Acceder al contenido</a></p>` : ''}
+                <small>📅 ${new Date(post.fecha_creacion).toLocaleString()} | 👤 ${escapeHtml(post.userAdmin)}</small>
             </div>
         `).join('');
     }
 
-    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';}); }
-    function toggleMenu() { const m = document.getElementById('menu'); m.style.display = m.style.display === 'flex' ? 'none' : 'flex'; }
-    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function toggleMenu() {
+        const m = document.getElementById('menu');
+        m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    // Inicializar
     cargarConfig();
+    verificarRegistro();
     cargarPosts();
     setInterval(cargarPosts, 60000);
 </script>
 </body>
-    </html>
+</html>
