@@ -6,33 +6,28 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
     <link rel="manifest" href="/site.webmanifest">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>ACAES | Asociación de Ciencias Astronómicas del Estado Sucre</title>
+    <title>Admin ACAES | Panel de Control</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, sans-serif; overscroll-behavior: none; }
-        .header { background: #0a0c10; padding: 20px; border-bottom: 2px solid #00d4ff; text-align: center; }
-        h1 { font-size: 1.5rem; }
-        .sub { color: #00d4ff; font-size: 0.7rem; margin-top: 5px; }
-        .hamburguesa { font-size: 32px; cursor: pointer; padding: 15px; display: inline-block; color: #00d4ff; }
-        nav { background: #11141c; display: none; flex-direction: column; padding: 10px; position: absolute; width: 200px; z-index: 100; border-radius: 0 0 10px 0; }
-        nav a { color: white; text-decoration: none; padding: 12px; border-bottom: 1px solid #2a2f3a; }
-        .feed { padding: 15px; max-width: 800px; margin: auto; }
-        .post { background: #12161f; border: 1px solid #00d4ff; border-radius: 16px; margin-bottom: 25px; padding: 18px; }
-        .post h3 { color: #00d4ff; margin-bottom: 10px; }
-        .post img { max-width: 100%; border-radius: 12px; margin: 12px 0; cursor: pointer; }
-        .tipo { font-size: 0.7rem; background: #1e2a3a; display: inline-block; padding: 4px 12px; border-radius: 20px; margin-bottom: 10px; }
-        .seccion-tag { font-size: 0.7rem; background: #00d4ff33; display: inline-block; padding: 4px 12px; border-radius: 20px; margin-left: 8px; }
-        .ws-float { position: fixed; bottom: 20px; right: 20px; background: #25D366; border-radius: 50%; padding: 14px; text-decoration: none; font-size: 28px; box-shadow: 0 2px 10px black; z-index: 1000; }
-        .loader { text-align: center; padding: 40px; color: #00d4ff; }
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-        .modal-content { background: #1a1f2a; padding: 25px; border-radius: 20px; width: 90%; max-width: 350px; border: 1px solid #00d4ff; }
-        .modal-content input { width: 100%; margin: 10px 0; padding: 12px; background: #0b0e14; border: 1px solid #00d4ff; color: white; border-radius: 10px; }
-        .modal-content button { background: #00d4ff; color: #0b0e14; border: none; padding: 12px; width: 100%; border-radius: 40px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .mensaje-bienvenida { background: #00d4ff22; border-left: 3px solid #00d4ff; padding: 10px 15px; margin: 10px; border-radius: 8px; text-align: center; }
-        .cerrar-modal { background: #ff4444 !important; margin-top: 5px; }
-        small { color: #888; font-size: 0.7rem; }
+        body { background: #0b0e14; color: #ccc; font-family: system-ui; padding: 20px; max-width: 800px; margin: auto; overscroll-behavior: none; }
+        input, select, textarea { width: 100%; margin: 12px 0; background: #1a1f2a; border: 1px solid #00d4ff; color: white; padding: 12px; border-radius: 12px; }
+        button { background: #00d4ff; color: #0b0e14; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 40px; cursor: pointer; margin-top: 10px; }
+        .preview { background: #0f121c; border: 1px dashed #00d4ff; border-radius: 20px; padding: 15px; margin: 20px 0; }
+        .post-item, .usuario-item, .seccion-item { background: #1a1f2a; border-radius: 12px; padding: 12px; margin-bottom: 12px; border-left: 3px solid #00d4ff; }
+        .post-item button, .seccion-item button { width: auto; padding: 6px 12px; margin-top: 8px; background: #ff4444; color: white; display: inline-block; margin-right: 8px; }
+        .seccion-item button.editar { background: #ffaa00; }
+        .seccion { background: #0f121c; border-radius: 20px; padding: 20px; margin-bottom: 30px; }
+        .error { color: #ff8888; background: #330000; padding: 10px; border-radius: 12px; margin-top: 10px; }
+        .exito { color: #88ff88; background: #003300; padding: 10px; border-radius: 12px; }
+        hr { border-color: #00d4ff33; margin: 20px 0; }
+        h3 { color: #00d4ff; margin-top: 0; }
+        .login-box { max-width: 400px; margin: 100px auto; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { background: #1a1f2a; padding: 10px 20px; border-radius: 40px; cursor: pointer; }
+        .tab.activo { background: #00d4ff; color: #0b0e14; }
+        .tab-content { display: none; }
+        .tab-content.activo { display: block; }
         .btn-instalar { background: #00d4ff; color: #0b0e14; border: none; padding: 12px 24px; border-radius: 40px; font-weight: bold; cursor: pointer; margin: 20px auto; display: block; }
-        @media (max-width: 600px) { .post { padding: 12px; } h1 { font-size: 1.2rem; } }
     </style>
     <script>
         let deferredPrompt;
@@ -51,125 +46,131 @@
     </script>
 </head>
 <body>
-<div class="hamburguesa" onclick="toggleMenu()">☰</div>
-<nav id="menu"></nav>
-<div class="header">
-    <h1>🔭 ACAES</h1>
-    <div class="sub">Asociación de Ciencias Astronómicas del Estado Sucre</div>
-</div>
-<div id="mensajeBienvenida" class="mensaje-bienvenida"></div>
-<div id="feed" class="feed"><div class="loader">Cargando...</div></div>
-<a id="wsLink" class="ws-float">💬</a>
+<div id="app"></div>
 <button id="btnInstalar" onclick="instalarApp()" style="display: none; margin: 20px auto;" class="btn-instalar">📲 Instalar App</button>
 
 <script>
-    let usuarioActual = null;
-    let whatsappNumero = '584240000000';
-    let secciones = [];
+    let logged = false;
+    let userAdmin = localStorage.getItem('acaes_admin_nombre') || 'Admin';
 
-    async function cargarConfig() {
+    async function checkAuth() {
         try {
-            const res = await fetch('/api/config');
-            const cfg = await res.json();
-            whatsappNumero = cfg.whatsapp;
-            document.getElementById('wsLink').href = `https://wa.me/${whatsappNumero}?text=Hola%20ACAES`;
-        } catch(e) { console.log('Error config:', e); }
+            const res = await fetch('/api/admin/check');
+            const data = await res.json();
+            logged = data.logged;
+            if (logged) {
+                await cargarConfiguracionInicial();
+                renderPanel();
+            } else {
+                renderLogin();
+            }
+        } catch(e) {
+            renderLogin();
+        }
     }
 
-    async function cargarSeccionesYMenu() {
+    async function cargarConfiguracionInicial() {
+        try {
+            const res = await fetch('/api/admin/config');
+            const cfg = await res.json();
+            window.botTokenActual = cfg.bot_token || '';
+            window.adminIdActual = cfg.admin_telegram_id || '';
+        } catch(e) {
+            window.botTokenActual = '';
+            window.adminIdActual = '';
+        }
+    }
+
+    function renderLogin() {
+        document.getElementById('app').innerHTML = `
+            <div class="login-box">
+                <h2>🔐 Acceso Admin ACAES</h2>
+                <input type="password" id="pass" placeholder="Contraseña">
+                <button onclick="login()">Ingresar</button>
+                <div id="msg"></div>
+            </div>
+        `;
+    }
+
+    window.login = async function() {
+        const pass = document.getElementById('pass').value;
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ password: pass })
+            });
+            if (res.ok) {
+                logged = true;
+                await cargarConfiguracionInicial();
+                renderPanel();
+            } else {
+                document.getElementById('msg').innerHTML = '<div class="error">Contraseña incorrecta</div>';
+            }
+        } catch(e) {
+            document.getElementById('msg').innerHTML = '<div class="error">Error de conexión</div>';
+        }
+    };
+
+    window.logout = async function() {
+        await fetch('/api/admin/logout', { method: 'POST' });
+        logged = false;
+        renderLogin();
+    };
+
+    let secciones = [];
+
+    async function cargarSecciones() {
         try {
             const res = await fetch('/api/secciones');
             secciones = await res.json();
         } catch(e) { secciones = []; }
-        
-        let esAdmin = false;
-        try {
-            const adminCheck = await fetch('/api/admin/check');
-            const adminData = await adminCheck.json();
-            esAdmin = adminData.logged;
-        } catch(e) {}
-        
-        const menu = document.getElementById('menu');
-        menu.innerHTML = `<a href="/">📡 Inicio</a>`;
-        secciones.forEach(sec => {
-            menu.innerHTML += `<a href="#" onclick="cargarPorSeccion('${sec.slug}'); return false;">📁 ${sec.nombre}</a>`;
-        });
-        menu.innerHTML += `<a href="https://t.me/acaeslacertanotifica" target="_blank">📢 Canal TG</a>`;
-        if (esAdmin) {
-            menu.innerHTML += `<a href="/admin">⚙️ Panel Admin</a>`;
-        }
-    }
-
-    window.cargarPorSeccion = async function(slug) {
-        document.getElementById('feed').innerHTML = '<div class="loader">Cargando...</div>';
-        try {
-            const res = await fetch(`/api/posts/seccion/${slug}`);
-            const posts = await res.json();
-            renderizarPosts(posts);
-        } catch(e) {
-            document.getElementById('feed').innerHTML = '<div class="post">Error al cargar la sección</div>';
-        }
-    };
-
-    async function verificarRegistro() {
-        const nombreGuardado = localStorage.getItem('acaes_usuario');
-        if (nombreGuardado) {
-            try {
-                const res = await fetch(`/api/usuario/${encodeURIComponent(nombreGuardado)}`);
-                const data = await res.json();
-                if (data.exists) {
-                    usuarioActual = data.user;
-                    document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido de vuelta, ${escapeHtml(nombreGuardado)}! 🌟`;
-                    return true;
-                } else {
-                    localStorage.removeItem('acaes_usuario');
-                }
-            } catch(e) {}
-        }
-        mostrarModalRegistro();
-        return false;
-    }
-
-    function mostrarModalRegistro() {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.id = 'modalRegistro';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <h3>📝 Regístrate en ACAES</h3>
-                <p style="font-size:0.8rem; margin-bottom:10px;">Para acceder al contenido y novedades</p>
-                <input type="text" id="regNombre" placeholder="Tu nombre completo *" autocomplete="off">
-                <button onclick="registrarUsuario()">📡 Registrarme</button>
-                <button class="cerrar-modal" onclick="cerrarModal()">Ahora no</button>
+        const div = document.getElementById('listaSecciones');
+        if (!secciones || !secciones.length) { div.innerHTML = '<p>Sin secciones</p>'; return; }
+        div.innerHTML = secciones.map(sec => `
+            <div class="seccion-item">
+                <strong>${escapeHtml(sec.nombre)}</strong> (slug: ${sec.slug}) - Orden: ${sec.orden}
+                <br>
+                <button class="editar" onclick="editarSeccion(${sec.id}, '${escapeHtml(sec.nombre)}', '${sec.slug}', ${sec.orden})">✏️ Editar</button>
+                <button onclick="eliminarSeccion(${sec.id})">🗑️ Eliminar</button>
             </div>
-        `;
-        document.body.appendChild(modal);
+        `).join('');
     }
 
-    window.cerrarModal = function() {
-        const modal = document.getElementById('modalRegistro');
-        if(modal) modal.remove();
+    window.mostrarFormNuevaSeccion = function() {
+        document.getElementById('formSeccion').style.display = 'block';
+        document.getElementById('seccionId').value = '';
+        document.getElementById('seccionNombre').value = '';
+        document.getElementById('seccionSlug').value = '';
+        document.getElementById('seccionOrden').value = '0';
     };
 
-    window.registrarUsuario = async function() {
-        const nombre = document.getElementById('regNombre').value.trim();
-        if (!nombre || nombre.length < 3) {
-            alert('El nombre debe tener al menos 3 letras');
+    window.guardarSeccion = async function() {
+        const id = document.getElementById('seccionId').value;
+        const nombre = document.getElementById('seccionNombre').value.trim();
+        const slug = document.getElementById('seccionSlug').value.trim().toLowerCase().replace(/ /g, '_');
+        const orden = parseInt(document.getElementById('seccionOrden').value) || 0;
+        
+        if (!nombre || !slug) {
+            alert('Nombre y slug requeridos');
             return;
         }
+        
+        const url = id ? `/api/admin/secciones/${id}` : '/api/admin/secciones';
+        const method = id ? 'PUT' : 'POST';
+        
         try {
-            const res = await fetch('/api/registrar', {
-                method: 'POST',
+            const res = await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nombre })
+                body: JSON.stringify({ nombre, slug, orden })
             });
-            const data = await res.json();
             if (res.ok) {
-                localStorage.setItem('acaes_usuario', nombre);
-                usuarioActual = { nombre };
-                document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido, ${escapeHtml(nombre)}! 🌟`;
-                cerrarModal();
+                document.getElementById('formSeccion').style.display = 'none';
+                cargarSecciones();
+                cargarSeccionesSelect();
             } else {
+                const data = await res.json();
                 alert('Error: ' + data.error);
             }
         } catch(e) {
@@ -177,65 +178,408 @@
         }
     };
 
-    async function cargarPosts() {
+    window.editarSeccion = function(id, nombre, slug, orden) {
+        document.getElementById('formSeccion').style.display = 'block';
+        document.getElementById('seccionId').value = id;
+        document.getElementById('seccionNombre').value = nombre;
+        document.getElementById('seccionSlug').value = slug;
+        document.getElementById('seccionOrden').value = orden;
+    };
+
+    window.eliminarSeccion = async function(id) {
+        if (!confirm('¿Eliminar esta sección?')) return;
         try {
-            const res = await fetch('/api/posts');
-            if (!res.ok) throw new Error();
-            const posts = await res.json();
-            localStorage.setItem('feed_cache', JSON.stringify(posts));
-            renderizarPosts(posts);
-        } catch (e) {
-            const cache = localStorage.getItem('feed_cache');
-            if (cache) {
-                renderizarPosts(JSON.parse(cache));
+            const res = await fetch(`/api/admin/secciones/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                cargarSecciones();
+                cargarSeccionesSelect();
             } else {
-                document.getElementById('feed').innerHTML = '<div class="post">⚠️ Sin conexión. Reintentá más tarde.</div>';
+                alert('Error al eliminar');
             }
+        } catch(e) {
+            alert('Error de conexión');
         }
+    };
+
+    async function cargarSeccionesSelect() {
+        try {
+            const res = await fetch('/api/secciones');
+            const secciones = await res.json();
+            const select = document.getElementById('seccionSelect');
+            if (select) {
+                select.innerHTML = '<option value="">Sin sección</option>';
+                secciones.forEach(sec => {
+                    select.innerHTML += `<option value="${sec.id}">${escapeHtml(sec.nombre)}</option>`;
+                });
+            }
+        } catch(e) {}
     }
 
-    function renderizarPosts(posts) {
-        const feedDiv = document.getElementById('feed');
-        if (!posts || !posts.length) {
-            feedDiv.innerHTML = '<div class="post">🌌 No hay publicaciones aún.</div>';
+    async function renderPanel() {
+        const html = `
+            <h2>🛸 Panel de Control ACAES</h2>
+            <button onclick="logout()" style="background:#ff4444; margin-bottom:20px;">🚪 Cerrar sesión</button>
+            
+            <div class="tabs">
+                <div class="tab activo" onclick="mostrarTab('publicar')">📝 Publicar</div>
+                <div class="tab" onclick="mostrarTab('secciones')">📁 Secciones</div>
+                <div class="tab" onclick="mostrarTab('bot')">🤖 Bot Telegram</div>
+                <div class="tab" onclick="mostrarTab('config')">⚙️ Configuración</div>
+                <div class="tab" onclick="mostrarTab('usuarios')">👥 Usuarios</div>
+                <div class="tab" onclick="mostrarTab('suscriptores')">📡 Suscriptores</div>
+                <div class="tab" onclick="mostrarTab('posts')">📋 Publicaciones</div>
+            </div>
+            
+            <div id="tab-publicar" class="tab-content activo">
+                <div class="seccion">
+                    <h3>📝 Nueva publicación</h3>
+                    <form id="formPublicar" enctype="multipart/form-data">
+                        <input type="text" id="titulo" placeholder="Título *" required>
+                        <textarea id="contenido" rows="3" placeholder="Descripción"></textarea>
+                        <select id="tipo">
+                            <option value="Noticia">📰 Noticia</option>
+                            <option value="Investigacion">🔬 Investigación</option>
+                            <option value="Avistamiento">🔭 Avistamiento</option>
+                        </select>
+                        <select id="seccionSelect">
+                            <option value="">Sin sección</option>
+                        </select>
+                        <input type="text" id="enlace_externo" placeholder="Enlace externo">
+                        <input type="file" id="archivo" accept="image/*,application/pdf">
+                        <button type="submit">🚀 PUBLICAR Y ENVIAR A TODOS</button>
+                    </form>
+                    <div class="preview"><strong>Vista previa:</strong><div id="previewContent"></div></div>
+                </div>
+            </div>
+            
+            <div id="tab-secciones" class="tab-content">
+                <div class="seccion">
+                    <h3>📁 Gestionar Secciones</h3>
+                    <button onclick="mostrarFormNuevaSeccion()" style="background:#00d4ff; margin-bottom:15px;">+ Nueva Sección</button>
+                    <div id="listaSecciones">Cargando...</div>
+                    <div id="formSeccion" style="display:none; margin-top:20px; padding:15px; background:#1a1f2a; border-radius:12px;">
+                        <h4>Formulario Sección</h4>
+                        <input type="hidden" id="seccionId">
+                        <input type="text" id="seccionNombre" placeholder="Nombre (ej: Astrofísica)">
+                        <input type="text" id="seccionSlug" placeholder="Slug (ej: astrofisica)">
+                        <input type="number" id="seccionOrden" placeholder="Orden (1,2,3...)" value="0">
+                        <button onclick="guardarSeccion()">Guardar Sección</button>
+                        <button onclick="document.getElementById('formSeccion').style.display='none'">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="tab-bot" class="tab-content">
+                <div class="seccion">
+                    <h3>🤖 Configuración del Bot de Telegram</h3>
+                    <label>Token del Bot:</label>
+                    <input type="text" id="botToken" placeholder="Token del bot">
+                    <label>Tu ID de Telegram (admin):</label>
+                    <input type="text" id="adminId" placeholder="Ej: 7501019675">
+                    <button onclick="guardarConfigBot()">Guardar configuración del Bot</button>
+                    <div id="msgBot"></div>
+                    <hr>
+                    <p><strong>📌 Configurar Webhook (una sola vez):</strong></p>
+                    <button onclick="configurarWebhook()">Configurar Webhook</button>
+                    <div id="msgWebhook"></div>
+                </div>
+            </div>
+            
+            <div id="tab-config" class="tab-content">
+                <div class="seccion">
+                    <h3>⚙️ Configuración General</h3>
+                    <label>WhatsApp (solo números):</label>
+                    <input type="text" id="whatsappNumero" placeholder="584241234567">
+                    <button onclick="actualizarWhatsApp()">Actualizar WhatsApp</button>
+                    <div id="msgWhatsapp"></div>
+                    <hr>
+                    <label>Cambiar contraseña admin:</label>
+                    <input type="password" id="nuevaPass" placeholder="Nueva contraseña">
+                    <button onclick="cambiarPass()">Cambiar contraseña</button>
+                    <div id="msgPass"></div>
+                </div>
+            </div>
+            
+            <div id="tab-usuarios" class="tab-content">
+                <div class="seccion">
+                    <h3>👥 Usuarios registrados en la web</h3>
+                    <div id="listaUsuarios">Cargando...</div>
+                </div>
+            </div>
+            
+            <div id="tab-suscriptores" class="tab-content">
+                <div class="seccion">
+                    <h3>📡 Suscriptores de Telegram</h3>
+                    <div id="listaSuscriptores">Cargando...</div>
+                </div>
+            </div>
+            
+            <div id="tab-posts" class="tab-content">
+                <div class="seccion">
+                    <h3>📋 Publicaciones (${userAdmin})</h3>
+                    <div id="listaPosts">Cargando...</div>
+                </div>
+            </div>
+        `;
+        document.getElementById('app').innerHTML = html;
+        
+        await cargarSecciones();
+        await cargarSeccionesSelect();
+        await cargarListaPosts();
+        await cargarUsuarios();
+        await cargarSuscriptores();
+        await cargarWhatsAppActual();
+        
+        if (window.botTokenActual) document.getElementById('botToken').value = window.botTokenActual;
+        if (window.adminIdActual) document.getElementById('adminId').value = window.adminIdActual;
+        
+        actualizarVistaPrevia();
+        document.getElementById('formPublicar').onsubmit = publicar;
+        document.getElementById('titulo').addEventListener('input', actualizarVistaPrevia);
+        document.getElementById('contenido').addEventListener('input', actualizarVistaPrevia);
+        document.getElementById('tipo').addEventListener('change', actualizarVistaPrevia);
+        document.getElementById('enlace_externo').addEventListener('input', actualizarVistaPrevia);
+        document.getElementById('archivo').addEventListener('change', actualizarVistaPrevia);
+    }
+
+    window.mostrarTab = function(tab) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('activo'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('activo'));
+        document.getElementById(`tab-${tab}`).classList.add('activo');
+        if(event && event.target) event.target.classList.add('activo');
+    };
+
+    async function cargarWhatsAppActual() {
+        try {
+            const res = await fetch('/api/config');
+            const cfg = await res.json();
+            if(document.getElementById('whatsappNumero')) {
+                document.getElementById('whatsappNumero').value = cfg.whatsapp;
+            }
+        } catch(e) {}
+    }
+
+    window.actualizarWhatsApp = async function() {
+        const numero = document.getElementById('whatsappNumero').value;
+        if(!numero.match(/^[0-9]{10,15}$/)) {
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Número inválido</div>';
             return;
         }
-        feedDiv.innerHTML = posts.map(post => `
-            <div class="post">
-                <div>
-                    <span class="tipo">${escapeHtml(post.tipo || 'Noticia')}</span>
-                    ${post.seccion_nombre ? `<span class="seccion-tag">📁 ${escapeHtml(post.seccion_nombre)}</span>` : ''}
+        try {
+            const res = await fetch('/api/config/whatsapp', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ numero })
+            });
+            if(res.ok) {
+                document.getElementById('msgWhatsapp').innerHTML = '<div class="exito">✅ WhatsApp actualizado</div>';
+            } else {
+                document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error</div>';
+            }
+        } catch(e) {
+            document.getElementById('msgWhatsapp').innerHTML = '<div class="error">Error de conexión</div>';
+        }
+    };
+
+    window.guardarConfigBot = async function() {
+        const token = document.getElementById('botToken').value.trim();
+        const adminId = document.getElementById('adminId').value.trim();
+        
+        if (!token) {
+            document.getElementById('msgBot').innerHTML = '<div class="error">Token requerido</div>';
+            return;
+        }
+        
+        try {
+            let res1 = await fetch('/api/admin/bot_token', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ token })
+            });
+            
+            let res2 = { ok: true };
+            if (adminId) {
+                res2 = await fetch('/api/admin/admin_id', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: adminId })
+                });
+            }
+            
+            if (res1.ok && res2.ok) {
+                window.botTokenActual = token;
+                window.adminIdActual = adminId;
+                document.getElementById('msgBot').innerHTML = '<div class="exito">✅ Configuración guardada</div>';
+            } else {
+                document.getElementById('msgBot').innerHTML = '<div class="error">Error al guardar</div>';
+            }
+        } catch(e) {
+            document.getElementById('msgBot').innerHTML = '<div class="error">Error de conexión</div>';
+        }
+    };
+
+    window.configurarWebhook = async function() {
+        const token = document.getElementById('botToken').value.trim();
+        if (!token) {
+            document.getElementById('msgWebhook').innerHTML = '<div class="error">Primero guardá el token</div>';
+            return;
+        }
+        const urlActual = window.location.origin;
+        const webhookUrl = `${urlActual}/webhook`;
+        
+        try {
+            const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('msgWebhook').innerHTML = '<div class="exito">✅ Webhook configurado correctamente</div>';
+            } else {
+                document.getElementById('msgWebhook').innerHTML = `<div class="error">Error: ${data.description}</div>`;
+            }
+        } catch(e) {
+            document.getElementById('msgWebhook').innerHTML = '<div class="error">Error de conexión</div>';
+        }
+    };
+
+    window.cambiarPass = async function() {
+        const nuevaPass = document.getElementById('nuevaPass').value;
+        if(nuevaPass.length < 4) {
+            document.getElementById('msgPass').innerHTML = '<div class="error">Mínimo 4 caracteres</div>';
+            return;
+        }
+        try {
+            const res = await fetch('/api/admin/cambiar_pass', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nuevaPass })
+            });
+            if(res.ok) {
+                document.getElementById('msgPass').innerHTML = '<div class="exito">✅ Contraseña cambiada</div>';
+                document.getElementById('nuevaPass').value = '';
+            } else {
+                document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
+            }
+        } catch(e) {
+            document.getElementById('msgPass').innerHTML = '<div class="error">Error de conexión</div>';
+        }
+    };
+
+    async function cargarListaPosts() {
+        try {
+            const res = await fetch('/api/posts');
+            const posts = await res.json();
+            const div = document.getElementById('listaPosts');
+            if(!posts.length) { div.innerHTML = '<p>Sin publicaciones</p>'; return; }
+            div.innerHTML = posts.map(post => `
+                <div class="post-item">
+                    <strong>${escapeHtml(post.titulo)}</strong><br>
+                    <small>${post.tipo} | ${post.seccion_nombre ? post.seccion_nombre + ' | ' : ''}${new Date(post.fecha_creacion).toLocaleString()} | por ${escapeHtml(post.userAdmin)}</small><br>
+                    <button onclick="eliminarPost(${post.id})">🗑️ Eliminar</button>
                 </div>
-                <h3>${escapeHtml(post.titulo)}</h3>
-                ${post.contenido ? `<p>${escapeHtml(post.contenido)}</p>` : ''}
-                ${post.url_media && post.url_media.match(/\.(jpg|jpeg|png|webp)$/i) ? `<img src="${post.url_media}" loading="lazy" onclick="window.open(this.src)">` : ''}
-                ${post.url_media && post.url_media.match(/\.pdf$/i) ? `<p>📄 <a href="${post.url_media}" target="_blank">Ver PDF</a></p>` : ''}
-                ${post.enlace_externo ? `<p>🔗 <a href="${post.enlace_externo}" target="_blank">Acceder</a></p>` : ''}
-                <small>📅 ${new Date(post.fecha_creacion).toLocaleString()} | 👤 ${escapeHtml(post.userAdmin)}</small>
-            </div>
-        `).join('');
+            `).join('');
+        } catch(e) {
+            document.getElementById('listaPosts').innerHTML = '<p>Error al cargar</p>';
+        }
     }
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
+    async function cargarUsuarios() {
+        try {
+            const res = await fetch('/api/admin/usuarios');
+            const usuarios = await res.json();
+            const div = document.getElementById('listaUsuarios');
+            if(!usuarios.length) { div.innerHTML = '<p>Sin registros</p>'; return; }
+            div.innerHTML = usuarios.map(u => `
+                <div class="usuario-item">
+                    <strong>${escapeHtml(u.nombre)}</strong><br>
+                    📅 ${new Date(u.fecha_registro).toLocaleString()} | IP: ${u.ip || 'desconocida'}
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('listaUsuarios').innerHTML = '<p>Error al cargar</p>';
+        }
     }
 
-    function toggleMenu() {
-        const m = document.getElementById('menu');
-        m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+    async function cargarSuscriptores() {
+        try {
+            const res = await fetch('/api/admin/suscriptores');
+            const subs = await res.json();
+            const div = document.getElementById('listaSuscriptores');
+            if(!subs.length) { div.innerHTML = '<p>Sin suscriptores aún. Compartí el bot.</p>'; return; }
+            div.innerHTML = subs.map(s => `
+                <div class="usuario-item">
+                    🤖 ${s.nombre || 'Usuario'} ${s.username ? '@'+s.username : ''}<br>
+                    📅 ${new Date(s.fecha_suscripcion).toLocaleString()}
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('listaSuscriptores').innerHTML = '<p>Error al cargar</p>';
+        }
     }
 
-    cargarConfig();
-    cargarSeccionesYMenu();
-    verificarRegistro();
-    cargarPosts();
-    setInterval(cargarPosts, 60000);
+    window.eliminarPost = async function(id) {
+        if(!confirm('¿Eliminar publicación?')) return;
+        try {
+            const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+            if(res.ok) {
+                cargarListaPosts();
+            }
+        } catch(e) {}
+    };
+
+    function actualizarVistaPrevia() {
+        const titulo = document.getElementById('titulo')?.value || 'Sin título';
+        const tipo = document.getElementById('tipo')?.value || '';
+        const contenido = document.getElementById('contenido')?.value || '';
+        const enlace = document.getElementById('enlace_externo')?.value || '';
+        const archivo = document.getElementById('archivo')?.files[0];
+        let html = `<strong>${escapeHtml(titulo)}</strong> (${tipo})<br>`;
+        if(contenido) html += `<p>${escapeHtml(contenido.substring(0,100))}...</p>`;
+        if(enlace) html += `🔗 Enlace listo<br>`;
+        if(archivo) html += `📎 ${archivo.name}`;
+        const preview = document.getElementById('previewContent');
+        if(preview) preview.innerHTML = html;
+    }
+
+    async function publicar(e) {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('titulo', document.getElementById('titulo').value);
+        formData.append('contenido', document.getElementById('contenido').value);
+        formData.append('tipo', document.getElementById('tipo').value);
+        formData.append('seccion_id', document.getElementById('seccionSelect').value);
+        formData.append('enlace_externo', document.getElementById('enlace_externo').value);
+        formData.append('userAdmin', userAdmin);
+        const archivo = document.getElementById('archivo').files[0];
+        if(archivo) formData.append('archivo', archivo);
+        
+        const btn = document.querySelector('#formPublicar button');
+        btn.disabled = true;
+        btn.innerText = '🛰️ Enviando a todos...';
+        
+        try {
+            const res = await fetch('/api/publicar', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(res.ok) {
+                alert('✅ Publicado y enviado a todos los suscriptores');
+                document.getElementById('formPublicar').reset();
+                actualizarVistaPrevia();
+                cargarListaPosts();
+            } else {
+                throw new Error(data.error);
+            }
+        } catch(err) {
+            alert('❌ Error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '🚀 PUBLICAR Y ENVIAR A TODOS';
+        }
+    }
+
+    function escapeHtml(str) { 
+        if(!str) return '';
+        return str.replace(/[&<>]/g, function(m){ return m==='&'?'&amp;':m==='<'?'&lt;':'&gt;';});
+    }
+    
+    checkAuth();
 </script>
 </body>
 </html>
