@@ -9,7 +9,7 @@
     <title>ACAES | Asociación de Ciencias Astronómicas del Estado Sucre</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, sans-serif; }
+        body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, sans-serif; overscroll-behavior: none; }
         .header { background: #0a0c10; padding: 20px; border-bottom: 2px solid #00d4ff; text-align: center; }
         h1 { font-size: 1.5rem; }
         .sub { color: #00d4ff; font-size: 0.7rem; margin-top: 5px; }
@@ -68,15 +68,19 @@
     let secciones = [];
 
     async function cargarConfig() {
-        const res = await fetch('/api/config');
-        const cfg = await res.json();
-        whatsappNumero = cfg.whatsapp;
-        document.getElementById('wsLink').href = `https://wa.me/${whatsappNumero}?text=Hola%20ACAES`;
+        try {
+            const res = await fetch('/api/config');
+            const cfg = await res.json();
+            whatsappNumero = cfg.whatsapp;
+            document.getElementById('wsLink').href = `https://wa.me/${whatsappNumero}?text=Hola%20ACAES`;
+        } catch(e) { console.log('Error config:', e); }
     }
 
     async function cargarSeccionesYMenu() {
-        const res = await fetch('/api/secciones');
-        secciones = await res.json();
+        try {
+            const res = await fetch('/api/secciones');
+            secciones = await res.json();
+        } catch(e) { secciones = []; }
         
         let esAdmin = false;
         try {
@@ -103,22 +107,24 @@
             const posts = await res.json();
             renderizarPosts(posts);
         } catch(e) {
-            document.getElementById('feed').innerHTML = '<div class="post">Error al cargar</div>';
+            document.getElementById('feed').innerHTML = '<div class="post">Error al cargar la sección</div>';
         }
     };
 
     async function verificarRegistro() {
         const nombreGuardado = localStorage.getItem('acaes_usuario');
         if (nombreGuardado) {
-            const res = await fetch(`/api/usuario/${encodeURIComponent(nombreGuardado)}`);
-            const data = await res.json();
-            if (data.exists) {
-                usuarioActual = data.user;
-                document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido de vuelta, ${escapeHtml(nombreGuardado)}! 🌟`;
-                return true;
-            } else {
-                localStorage.removeItem('acaes_usuario');
-            }
+            try {
+                const res = await fetch(`/api/usuario/${encodeURIComponent(nombreGuardado)}`);
+                const data = await res.json();
+                if (data.exists) {
+                    usuarioActual = data.user;
+                    document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido de vuelta, ${escapeHtml(nombreGuardado)}! 🌟`;
+                    return true;
+                } else {
+                    localStorage.removeItem('acaes_usuario');
+                }
+            } catch(e) {}
         }
         mostrarModalRegistro();
         return false;
@@ -151,38 +157,46 @@
             alert('El nombre debe tener al menos 3 letras');
             return;
         }
-        const res = await fetch('/api/registrar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            localStorage.setItem('acaes_usuario', nombre);
-            usuarioActual = { nombre };
-            document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido, ${escapeHtml(nombre)}! 🌟`;
-            cerrarModal();
-        } else {
-            alert('Error: ' + data.error);
+        try {
+            const res = await fetch('/api/registrar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                localStorage.setItem('acaes_usuario', nombre);
+                usuarioActual = { nombre };
+                document.getElementById('mensajeBienvenida').innerHTML = `🌟 ¡Bienvenido, ${escapeHtml(nombre)}! 🌟`;
+                cerrarModal();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch(e) {
+            alert('Error de conexión');
         }
     };
 
     async function cargarPosts() {
         try {
             const res = await fetch('/api/posts');
+            if (!res.ok) throw new Error();
             const posts = await res.json();
             localStorage.setItem('feed_cache', JSON.stringify(posts));
             renderizarPosts(posts);
         } catch (e) {
             const cache = localStorage.getItem('feed_cache');
-            if (cache) renderizarPosts(JSON.parse(cache));
-            else document.getElementById('feed').innerHTML = '<div class="post">⚠️ Sin conexión</div>';
+            if (cache) {
+                renderizarPosts(JSON.parse(cache));
+            } else {
+                document.getElementById('feed').innerHTML = '<div class="post">⚠️ Sin conexión. Reintentá más tarde.</div>';
+            }
         }
     }
 
     function renderizarPosts(posts) {
         const feedDiv = document.getElementById('feed');
-        if (!posts.length) {
+        if (!posts || !posts.length) {
             feedDiv.innerHTML = '<div class="post">🌌 No hay publicaciones aún.</div>';
             return;
         }
