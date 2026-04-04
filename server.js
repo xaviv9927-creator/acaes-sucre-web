@@ -94,7 +94,6 @@ async function broadcastTelegram(mensaje, imagenUrl = null) {
     if (err || !botToken) return;
     
     getAdminTelegramId(async (err2, adminId) => {
-      // Enviar al admin
       if (adminId) {
         try {
           if (imagenUrl) {
@@ -114,7 +113,6 @@ async function broadcastTelegram(mensaje, imagenUrl = null) {
         } catch(e) {}
       }
       
-      // Enviar a suscriptores
       db.all('SELECT chat_id FROM suscriptores_telegram', async (err3, rows) => {
         if (rows && rows.length) {
           for (const row of rows) {
@@ -355,13 +353,29 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
   }
 });
 
-// ========== RUTAS HTML ==========
+// ========== RUTAS HTML (CORREGIDAS) ==========
+// Ruta principal - sirve index.html
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// Ruta admin - sirve admin.html
 app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/admin.html'));
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
+
+// Ruta por si alguien escribe /index.html
+app.get('/index.html', (req, res) => {
+  res.redirect('/');
+});
+
+// Ruta por si alguien escribe /admin.html
+app.get('/admin.html', (req, res) => {
+  res.redirect('/admin');
+});
+
+// Archivos estáticos (favicon, manifest, imágenes)
+app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 ACAES activo en puerto ${PORT}`));
