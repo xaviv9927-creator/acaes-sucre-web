@@ -60,7 +60,7 @@ db.run(`
   )
 `);
 
-// Insertar categorías predefinidas (raíces)
+// Insertar categorías predefinidas (raíces) si no existen
 const categoriasRaiz = [
   { nombre: 'Inicio', slug: 'inicio', padre: 0, orden: 1 },
   { nombre: 'Noticias', slug: 'noticias', padre: 0, orden: 2 },
@@ -82,7 +82,7 @@ categoriasRaiz.forEach(cat => {
   });
 });
 
-// Insertar subcategorías de ejemplo para 'Imágenes'
+// Insertar subcategorías de ejemplo para 'Imágenes' si no existen
 db.get("SELECT id FROM categorias WHERE slug = 'imagenes'", (err, row) => {
   if (row && !err) {
     const padreId = row.id;
