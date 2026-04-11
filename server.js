@@ -13,13 +13,18 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-// Sesión persistente en SQLite
+// Configuración de sesión robusta para Render
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.db', table: 'sessions' }),
-  secret: 'acaes_sucre_secret_2024',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true, secure: false }
+  secret: 'acaes_sucre_secret_2024_muy_largo',
+  resave: true,
+  saveUninitialized: true,
+  cookie: { 
+    maxAge: 30 * 24 * 60 * 60 * 1000, 
+    httpOnly: true, 
+    secure: false,      // Render usa HTTPS pero permitimos HTTP también
+    sameSite: 'lax'
+  }
 }));
 
 // Carpeta de uploads
@@ -67,7 +72,7 @@ function notificarAdmin(mensaje) {
     });
   });
 }
-async function broadcastTelegram(mensaje, imagenUrl = null) {
+async function broadcastTelegram(mensaje, imagenUrl = null, baseUrl) {
   getBotToken(async (err, botToken) => {
     if (err || !botToken) return;
     getAdminTelegramId(async (err2, adminId) => {
@@ -320,12 +325,20 @@ app.delete('/api/admin/categorias/:id', requireAdmin, (req, res) => {
 app.post('/api/admin/subcategoria', requireAdmin, (req, res) => {
   const { nombre, slug, padre_id } = req.body;
   if (!nombre || !slug || !padre_id) return res.status(400).json({ error: 'Datos incompletos' });
-  db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, (SELECT COALESCE(MAX(orden),0)+1 FROM categorias WHERE padre_id=?))",
-    [nombre, slug, padre_id, padre_id], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      notificarAdmin(`📁 *SUBCATEGORÍA CREADA*: ${nombre} (padre ID ${padre_id})`);
-      res.json({ success: true, id: this.lastID });
+  // Verificar que la categoría padre existe
+  db.get("SELECT id FROM categorias WHERE id = ?", [padre_id], (err, row) => {
+    if (err || !row) return res.status(400).json({ error: 'La categoría padre no existe' });
+    // Verificar que el slug no esté duplicado
+    db.get("SELECT id FROM categorias WHERE slug = ?", [slug], (err2, row2) => {
+      if (row2) return res.status(400).json({ error: 'Ya existe una categoría con ese slug' });
+      db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, (SELECT COALESCE(MAX(orden),0)+1 FROM categorias WHERE padre_id=?))",
+        [nombre, slug, padre_id, padre_id], function(err3) {
+          if (err3) return res.status(500).json({ error: err3.message });
+          notificarAdmin(`📁 *SUBCATEGORÍA CREADA*: ${nombre} (padre ID ${padre_id})`);
+          res.json({ success: true, id: this.lastID });
+        });
     });
+  });
 });
 
 app.get('/api/admin/usuarios', requireAdmin, (req, res) => {
@@ -399,14 +412,14 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
         if (categoria_id) {
           db.get("SELECT nombre FROM categorias WHERE id = ?", [categoria_id], (err2, row) => {
             if (row) catNombre = row.nombre;
-            const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}${catNombre ? `\n📁 Categoría: ${catNombre}` : ''}\n👤 Por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0,300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin}`;
-            const imagenUrl = url_media ? `${req.headers.origin}${url_media}` : null;
-            broadcastTelegram(mensaje, imagenUrl);
+            const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}${catNombre ? `\n📁 Categoría: ${catNombre}` : ''}\n👤 Por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0,300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin || 'https://acaes-sucre.onrender.com'}`;
+            const imagenUrl = url_media ? `${req.headers.origin || 'https://acaes-sucre.onrender.com'}${url_media}` : null;
+            broadcastTelegram(mensaje, imagenUrl, req.headers.origin);
           });
         } else {
-          const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}\n👤 Por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0,300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin}`;
-          const imagenUrl = url_media ? `${req.headers.origin}${url_media}` : null;
-          broadcastTelegram(mensaje, imagenUrl);
+          const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}\n👤 Por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0,300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin || 'https://acaes-sucre.onrender.com'}`;
+          const imagenUrl = url_media ? `${req.headers.origin || 'https://acaes-sucre.onrender.com'}${url_media}` : null;
+          broadcastTelegram(mensaje, imagenUrl, req.headers.origin);
         }
       });
     res.json({ success: true, message: 'Publicado' });
