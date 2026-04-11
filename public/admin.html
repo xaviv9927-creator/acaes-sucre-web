@@ -59,6 +59,7 @@
 <script>
     let logged = false;
     let userAdmin = localStorage.getItem('acaes_admin_nombre') || 'Admin';
+    let categoriasLista = []; // array plano
     let categoriasArbol = [];
 
     // ---------- AUTH ----------
@@ -125,39 +126,68 @@
         renderLogin();
     };
 
-    // ---------- CATEGORÍAS (selectores) ----------
-    async function cargarCategoriasPrincipales() {
-        try {
-            const res = await fetch('/api/categorias');
-            const todas = await res.json();
-            categoriasArbol = todas;
-            const selectCat = document.getElementById('categoriaSelect');
-            if (!selectCat) return;
-            selectCat.innerHTML = '<option value="">-- Selecciona categoría --</option>';
-            const raices = todas.filter(c => c.padre_id === 0);
-            raices.forEach(cat => {
-                selectCat.innerHTML += `<option value="${cat.id}">${escapeHtml(cat.nombre)}</option>`;
+    // ---------- CATEGORÍAS ----------
+    async function recargarCategorias() {
+        const res = await fetch('/api/categorias');
+        categoriasArbol = await res.json();
+        // generar lista plana también
+        const flat = [];
+        function flatten(arr) {
+            arr.forEach(c => {
+                flat.push({ id: c.id, nombre: c.nombre, slug: c.slug, padre_id: c.padre_id });
+                if (c.hijos) flatten(c.hijos);
             });
-            selectCat.addEventListener('change', () => {
-                const catId = selectCat.value;
-                const subSelect = document.getElementById('subcategoriaSelect');
-                subSelect.innerHTML = '<option value="">-- Ninguna --</option>';
-                if (!catId) return;
-                const hijos = todas.filter(c => c.padre_id == catId);
-                hijos.forEach(h => {
-                    subSelect.innerHTML += `<option value="${h.id}">${escapeHtml(h.nombre)}</option>`;
-                });
-            });
-        } catch(e) { console.error(e); }
+        }
+        flatten(categoriasArbol);
+        categoriasLista = flat;
     }
 
-    // Crear subcategoría rápida
+    async function llenarSelectCategorias(selectId, valorSeleccionado = null) {
+        await recargarCategorias();
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = '<option value="">-- Selecciona categoría --</option>';
+        function addOpciones(arr, nivel = 0) {
+            arr.forEach(cat => {
+                const prefix = '—'.repeat(nivel);
+                select.innerHTML += `<option value="${cat.id}" ${valorSeleccionado == cat.id ? 'selected' : ''}>${prefix} ${cat.nombre}</option>`;
+                if (cat.hijos) addOpciones(cat.hijos, nivel + 1);
+            });
+        }
+        addOpciones(categoriasArbol);
+    }
+
+    async function llenarSubcategorias(selectCatId, selectSubId) {
+        const catId = document.getElementById(selectCatId).value;
+        const subSelect = document.getElementById(selectSubId);
+        if (!subSelect) return;
+        subSelect.innerHTML = '<option value="">-- Ninguna --</option>';
+        if (!catId) return;
+        const cat = categoriasLista.find(c => c.id == catId);
+        if (!cat) return;
+        // buscar hijos en el árbol
+        function findHijos(arr, id) {
+            for (let c of arr) {
+                if (c.id == id) return c.hijos || [];
+                if (c.hijos) {
+                    const found = findHijos(c.hijos, id);
+                    if (found) return found;
+                }
+            }
+            return [];
+        }
+        const hijos = findHijos(categoriasArbol, parseInt(catId));
+        hijos.forEach(h => {
+            subSelect.innerHTML += `<option value="${h.id}">${h.nombre}</option>`;
+        });
+    }
+
     window.crearSubcategoria = async function() {
         const catId = document.getElementById('categoriaSelect').value;
         if (!catId) { alert('Primero selecciona una categoría principal'); return; }
         const nombre = prompt('Nombre de la nueva subcategoría:');
         if (!nombre) return;
-        const slug = prompt('Slug (identificador único, sin espacios):', nombre.toLowerCase().replace(/ /g, '-'));
+        let slug = prompt('Slug (identificador único, sin espacios):', nombre.toLowerCase().replace(/ /g, '-'));
         if (!slug) return;
         try {
             const res = await fetch('/api/admin/subcategoria', {
@@ -165,43 +195,36 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre, slug, padre_id: catId })
             });
+            const data = await res.json();
             if (res.ok) {
-                alert('✅ Subcategoría creada. Refrescando...');
-                await cargarCategoriasPrincipales();
-                // disparar change para actualizar subcategorías
-                const selectCat = document.getElementById('categoriaSelect');
-                selectCat.dispatchEvent(new Event('change'));
-                // también recargar lista de categorías en pestaña de gestión
-                cargarListaCategorias();
+                alert('✅ Subcategoría creada');
+                await llenarSelectCategorias('categoriaSelect', catId);
+                await llenarSubcategorias('categoriaSelect', 'subcategoriaSelect');
             } else {
-                const err = await res.json();
-                alert('Error: ' + err.error);
+                alert('Error: ' + data.error);
             }
         } catch(e) { alert('Error de conexión'); }
     };
 
-    // ---------- GESTIÓN DE CATEGORÍAS (listado y formulario) ----------
+    // ---------- CRUD Categorías (listado y formulario) ----------
     async function cargarListaCategorias() {
-        try {
-            const res = await fetch('/api/categorias');
-            const cats = await res.json();
-            const div = document.getElementById('listaCategorias');
-            if (!div) return;
-            function renderCats(lista, nivel = 0) {
-                let html = '';
-                lista.forEach(cat => {
-                    html += `<div class="categoria-item" style="margin-left: ${nivel * 20}px">
-                        <strong>${escapeHtml(cat.nombre)}</strong> (slug: ${cat.slug})
-                        <br>
-                        <button class="editar" onclick="editarCategoria(${cat.id}, '${escapeHtml(cat.nombre)}', '${cat.slug}', ${cat.padre_id || 0})">✏️ Editar</button>
-                        <button onclick="eliminarCategoria(${cat.id})">🗑️ Eliminar</button>
-                    </div>`;
-                    if (cat.hijos && cat.hijos.length) html += renderCats(cat.hijos, nivel + 1);
-                });
-                return html;
-            }
-            div.innerHTML = renderCats(cats) || '<p>No hay categorías</p>';
-        } catch(e) {}
+        await recargarCategorias();
+        const div = document.getElementById('listaCategorias');
+        if (!div) return;
+        function renderCats(arr, nivel = 0) {
+            let html = '';
+            arr.forEach(cat => {
+                html += `<div class="categoria-item" style="margin-left: ${nivel * 20}px">
+                    <strong>${escapeHtml(cat.nombre)}</strong> (slug: ${cat.slug})
+                    <br>
+                    <button class="editar" onclick="editarCategoria(${cat.id}, '${escapeHtml(cat.nombre)}', '${cat.slug}', ${cat.padre_id})">✏️ Editar</button>
+                    <button onclick="eliminarCategoria(${cat.id})">🗑️ Eliminar</button>
+                </div>`;
+                if (cat.hijos) html += renderCats(cat.hijos, nivel + 1);
+            });
+            return html;
+        }
+        div.innerHTML = renderCats(categoriasArbol) || '<p>No hay categorías</p>';
     }
 
     window.mostrarFormNuevaCategoria = function() {
@@ -211,16 +234,21 @@
         document.getElementById('catSlug').value = '';
         document.getElementById('catPadreSelect').value = '0';
         document.getElementById('catOrden').value = '0';
-        const selectPadre = document.getElementById('catPadreSelect');
-        selectPadre.innerHTML = '<option value="0">Ninguna (raíz)</option>';
-        function agregarPadres(cats, nivel = 0) {
-            cats.forEach(cat => {
-                selectPadre.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${escapeHtml(cat.nombre)}</option>`;
-                if (cat.hijos && cat.hijos.length) agregarPadres(cat.hijos, nivel + 1);
+        llenarSelectPadre();
+    };
+
+    async function llenarSelectPadre() {
+        await recargarCategorias();
+        const select = document.getElementById('catPadreSelect');
+        select.innerHTML = '<option value="0">Ninguna (raíz)</option>';
+        function addOpts(arr, nivel = 0) {
+            arr.forEach(cat => {
+                select.innerHTML += `<option value="${cat.id}">${'—'.repeat(nivel)} ${cat.nombre}</option>`;
+                if (cat.hijos) addOpts(cat.hijos, nivel + 1);
             });
         }
-        agregarPadres(categoriasArbol);
-    };
+        addOpts(categoriasArbol);
+    }
 
     window.guardarCategoria = async function() {
         const id = document.getElementById('catId').value;
@@ -240,21 +268,19 @@
             if (res.ok) {
                 document.getElementById('formCategoria').style.display = 'none';
                 await cargarListaCategorias();
-                await cargarCategoriasPrincipales();
+                await llenarSelectCategorias('categoriaSelect');
             } else alert('Error');
         } catch(e) { alert('Error de conexión'); }
     };
 
-    window.editarCategoria = function(id, nombre, slug, padre_id) {
-        cargarCategoriasPrincipales(); // refrescar árbol
-        setTimeout(() => {
-            document.getElementById('formCategoria').style.display = 'block';
-            document.getElementById('catId').value = id;
-            document.getElementById('catNombre').value = nombre;
-            document.getElementById('catSlug').value = slug;
-            document.getElementById('catPadreSelect').value = padre_id;
-            document.getElementById('catOrden').value = '0';
-        }, 200);
+    window.editarCategoria = async function(id, nombre, slug, padre_id) {
+        await llenarSelectPadre();
+        document.getElementById('formCategoria').style.display = 'block';
+        document.getElementById('catId').value = id;
+        document.getElementById('catNombre').value = nombre;
+        document.getElementById('catSlug').value = slug;
+        document.getElementById('catPadreSelect').value = padre_id;
+        document.getElementById('catOrden').value = '0';
     };
 
     window.eliminarCategoria = async function(id) {
@@ -263,7 +289,7 @@
             const res = await fetch(`/api/admin/categorias/${id}`, { method: 'DELETE' });
             if (res.ok) {
                 await cargarListaCategorias();
-                await cargarCategoriasPrincipales();
+                await llenarSelectCategorias('categoriaSelect');
             } else alert('Error');
         } catch(e) { alert('Error'); }
     };
@@ -302,9 +328,7 @@
         try {
             const resPost = await fetch(`/api/posts/${id}`);
             const post = await resPost.json();
-            // cargar categorías para el select
-            const resCats = await fetch('/api/categorias');
-            const todasCats = await resCats.json();
+            await recargarCategorias();
             const modal = document.createElement('div');
             modal.className = 'modal-editar';
             modal.innerHTML = `
@@ -327,13 +351,13 @@
             `;
             document.body.appendChild(modal);
             const selectCat = document.getElementById('editCategoria');
-            function llenarSelectCats(cats, nivel = 0) {
-                cats.forEach(cat => {
-                    selectCat.innerHTML += `<option value="${cat.id}" ${post.categoria_id == cat.id ? 'selected' : ''}>${'—'.repeat(nivel)} ${escapeHtml(cat.nombre)}</option>`;
-                    if (cat.hijos) llenarSelectCats(cat.hijos, nivel + 1);
+            function addOptions(arr, nivel = 0) {
+                arr.forEach(cat => {
+                    selectCat.innerHTML += `<option value="${cat.id}" ${post.categoria_id == cat.id ? 'selected' : ''}>${'—'.repeat(nivel)} ${cat.nombre}</option>`;
+                    if (cat.hijos) addOptions(cat.hijos, nivel + 1);
                 });
             }
-            llenarSelectCats(todasCats);
+            addOptions(categoriasArbol);
         } catch(e) { alert('Error al cargar publicación'); }
     };
 
@@ -448,18 +472,13 @@
                             <option value="Investigacion">🔬 Investigación</option>
                             <option value="Avistamiento">🔭 Avistamiento</option>
                         </select>
-
                         <label>Categoría principal:</label>
                         <select id="categoriaSelect" required></select>
-
                         <label>Subcategoría (opcional):</label>
-                        <select id="subcategoriaSelect">
-                            <option value="">-- Ninguna --</option>
-                        </select>
+                        <select id="subcategoriaSelect"></select>
                         <div class="flex-row">
-                            <button type="button" id="btnNuevaSubcategoria" style="background:#ffaa00; margin-top:0;">➕ Crear nueva subcategoría</button>
+                            <button type="button" id="btnNuevaSubcategoria" style="background:#ffaa00;">➕ Crear nueva subcategoría</button>
                         </div>
-
                         <input type="text" id="enlace_externo" placeholder="Enlace externo">
                         <input type="file" id="archivo" accept="image/*,application/pdf">
                         <button type="submit">🚀 PUBLICAR</button>
@@ -492,7 +511,10 @@
         `;
         document.getElementById('app').innerHTML = html;
 
-        await cargarCategoriasPrincipales();
+        await llenarSelectCategorias('categoriaSelect');
+        document.getElementById('categoriaSelect').addEventListener('change', () => llenarSubcategorias('categoriaSelect', 'subcategoriaSelect'));
+        document.getElementById('btnNuevaSubcategoria').onclick = () => crearSubcategoria();
+
         await cargarListaCategorias();
         await cargarListaPosts();
         await cargarUsuarios();
@@ -508,7 +530,6 @@
         document.getElementById('tipo').addEventListener('change', actualizarVistaPrevia);
         document.getElementById('enlace_externo').addEventListener('input', actualizarVistaPrevia);
         document.getElementById('archivo').addEventListener('change', actualizarVistaPrevia);
-        document.getElementById('btnNuevaSubcategoria').onclick = () => crearSubcategoria();
     }
 
     window.mostrarTab = function(tab) {
@@ -562,4 +583,4 @@
     checkAuth();
 </script>
 </body>
-</html>
+    </html>
