@@ -65,7 +65,6 @@
         function toggleMenu() {
             document.querySelector('.nav-menu').classList.toggle('active');
         }
-        // Cerrar menú al hacer clic fuera
         document.addEventListener('click', function(event) {
             const menu = document.querySelector('.nav-menu');
             const toggle = document.querySelector('.menu-toggle');
@@ -95,8 +94,7 @@
 <script>
     let whatsappNumero = '584240000000';
     let categoriaActivaSlug = 'inicio';
-    let intervalCarga;
-    let categoriasData = []; // guardar el árbol para no recargar todo el tiempo
+    let categoriasData = [];
 
     async function cargarConfig() {
         try {
@@ -107,7 +105,6 @@
         } catch(e) {}
     }
 
-    // Construir menú a partir de datos y resaltar categoría activa
     function construirMenu(categorias, slugActivo) {
         const navMenu = document.getElementById('navMenu');
         navMenu.innerHTML = '';
@@ -139,7 +136,6 @@
             }
             navMenu.appendChild(li);
         });
-        // Admin link
         fetch('/api/admin/check').then(res => res.json()).then(data => {
             if (data.logged) {
                 const liAdmin = document.createElement('li');
@@ -161,15 +157,15 @@
     }
 
     window.cargarPorCategoria = async function(slug) {
-        if (slug === categoriaActivaSlug) return; // ya estamos ahí
+        if (slug === categoriaActivaSlug) return;
         categoriaActivaSlug = slug;
         localStorage.setItem('acaes_categoria_activa', slug);
-        // Actualizar resaltado sin recargar todo el menú
+        // actualizar resaltado sin recargar todo el menú
         document.querySelectorAll('#navMenu a').forEach(a => {
-            const aSlug = a.getAttribute('data-slug');
-            if (aSlug === slug) a.classList.add('activo');
-            else a.classList.remove('activo');
+            a.classList.remove('activo');
         });
+        // marcar el nuevo activo (difícil, pero simplemente recargamos el menú)
+        await cargarMenu();
         document.getElementById('feed').innerHTML = '<div class="loader">Cargando...</div>';
         try {
             const res = await fetch(`/api/posts/categoria/${slug}`);
@@ -290,21 +286,6 @@
         }
     });
     verificarRegistro();
-
-    // Recarga periódica solo si la página está visible y no está activa una categoría (o si, pero sin regenerar menú)
-    window.addEventListener('load', () => {
-        if (intervalCarga) clearInterval(intervalCarga);
-        intervalCarga = setInterval(() => {
-            if (!document.hidden) {
-                if (categoriaActivaSlug && categoriaActivaSlug !== 'inicio') {
-                    fetch(`/api/posts/categoria/${categoriaActivaSlug}`).then(r=>r.json()).then(posts => renderizarPosts(posts)).catch(e=>{});
-                } else {
-                    cargarPosts();
-                }
-            }
-        }, 120000);
-    });
-    window.addEventListener('beforeunload', () => clearInterval(intervalCarga));
 </script>
 </body>
 </html>
