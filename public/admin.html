@@ -59,10 +59,8 @@
 <script>
     let logged = false;
     let userAdmin = localStorage.getItem('acaes_admin_nombre') || 'Admin';
-    let categoriasLista = []; // array plano
     let categoriasArbol = [];
 
-    // ---------- AUTH ----------
     async function checkAuth() {
         try {
             const res = await fetch('/api/admin/check');
@@ -126,20 +124,9 @@
         renderLogin();
     };
 
-    // ---------- CATEGORÍAS ----------
     async function recargarCategorias() {
         const res = await fetch('/api/categorias');
         categoriasArbol = await res.json();
-        // generar lista plana también
-        const flat = [];
-        function flatten(arr) {
-            arr.forEach(c => {
-                flat.push({ id: c.id, nombre: c.nombre, slug: c.slug, padre_id: c.padre_id });
-                if (c.hijos) flatten(c.hijos);
-            });
-        }
-        flatten(categoriasArbol);
-        categoriasLista = flat;
     }
 
     async function llenarSelectCategorias(selectId, valorSeleccionado = null) {
@@ -163,9 +150,6 @@
         if (!subSelect) return;
         subSelect.innerHTML = '<option value="">-- Ninguna --</option>';
         if (!catId) return;
-        const cat = categoriasLista.find(c => c.id == catId);
-        if (!cat) return;
-        // buscar hijos en el árbol
         function findHijos(arr, id) {
             for (let c of arr) {
                 if (c.id == id) return c.hijos || [];
@@ -206,7 +190,6 @@
         } catch(e) { alert('Error de conexión'); }
     };
 
-    // ---------- CRUD Categorías (listado y formulario) ----------
     async function cargarListaCategorias() {
         await recargarCategorias();
         const div = document.getElementById('listaCategorias');
@@ -294,7 +277,6 @@
         } catch(e) { alert('Error'); }
     };
 
-    // ---------- PUBLICACIONES (listado, editar, eliminar) ----------
     async function cargarListaPosts() {
         try {
             const res = await fetch('/api/posts');
@@ -381,7 +363,6 @@
         } catch(e) { alert('Error'); }
     };
 
-    // ---------- OTROS (WhatsApp, Bot, Usuarios, Suscriptores) ----------
     async function cargarUsuarios() {
         const res = await fetch('/api/admin/usuarios');
         const usuarios = await res.json();
@@ -447,7 +428,6 @@
         else document.getElementById('msgPass').innerHTML = '<div class="error">Error</div>';
     };
 
-    // ---------- RENDER PRINCIPAL ----------
     async function renderPanel() {
         const html = `
             <h2>🛸 Panel de Control ACAES</h2>
