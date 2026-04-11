@@ -10,114 +10,28 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #0b0e14; color: #e0e0e0; font-family: system-ui, sans-serif; overscroll-behavior: none; }
-        .top-bar {
-            background: #0a0c10;
-            border-bottom: 2px solid #00d4ff;
-            padding: 0 20px;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        .nav-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 1200px;
-            margin: 0 auto;
-            flex-wrap: wrap;
-        }
-        .logo h1 {
-            font-size: 1.5rem;
-            color: #00d4ff;
-        }
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .nav-menu li {
-            position: relative;
-        }
-        .nav-menu a {
-            display: block;
-            padding: 16px 18px;
-            color: #e0e0e0;
-            text-decoration: none;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: 0.2s;
-            border-radius: 8px;
-        }
-        .nav-menu a:hover, .nav-menu a.activo {
-            background: #00d4ff22;
-            color: #00d4ff;
-            border-bottom: 2px solid #00d4ff;
-        }
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background: #11141c;
-            min-width: 200px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
-            z-index: 1;
-            border: 1px solid #00d4ff33;
-            border-radius: 8px;
-            top: 100%;
-            left: 0;
-        }
-        .dropdown-content a {
-            padding: 12px 16px;
-            font-size: 0.9rem;
-            border-bottom: 1px solid #2a2f3a;
-        }
+        .top-bar { background: #0a0c10; border-bottom: 2px solid #00d4ff; padding: 0 20px; position: sticky; top: 0; z-index: 1000; }
+        .nav-container { display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto; flex-wrap: wrap; }
+        .logo h1 { font-size: 1.5rem; color: #00d4ff; }
+        .nav-menu { display: flex; list-style: none; gap: 8px; flex-wrap: wrap; }
+        .nav-menu li { position: relative; }
+        .nav-menu a { display: block; padding: 16px 18px; color: #e0e0e0; text-decoration: none; font-size: 1rem; font-weight: 500; transition: 0.2s; border-radius: 8px; cursor: pointer; }
+        .nav-menu a:hover, .nav-menu a.activo { background: #00d4ff22; color: #00d4ff; border-bottom: 2px solid #00d4ff; }
+        .dropdown-content { display: none; position: absolute; background: #11141c; min-width: 200px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); z-index: 1; border: 1px solid #00d4ff33; border-radius: 8px; top: 100%; left: 0; }
+        .dropdown-content a { padding: 12px 16px; font-size: 0.9rem; border-bottom: 1px solid #2a2f3a; }
         .dropdown-content a:last-child { border-bottom: none; }
         .dropdown:hover .dropdown-content { display: block; }
         @media (max-width: 768px) {
-            .nav-menu {
-                display: none;
-                flex-direction: column;
-                width: 100%;
-                background: #0a0c10;
-                padding: 10px 0;
-            }
-            .nav-menu.active {
-                display: flex;
-            }
-            .menu-toggle {
-                display: block;
-                font-size: 2rem;
-                cursor: pointer;
-                color: #00d4ff;
-            }
-            .dropdown-content {
-                position: static;
-                box-shadow: none;
-                padding-left: 20px;
-                background: #0f121c;
-            }
-            .nav-menu a {
-                padding: 12px;
-            }
+            .nav-menu { display: none; flex-direction: column; width: 100%; background: #0a0c10; padding: 10px 0; }
+            .nav-menu.active { display: flex; }
+            .menu-toggle { display: block; font-size: 2rem; cursor: pointer; color: #00d4ff; }
+            .dropdown-content { position: static; box-shadow: none; padding-left: 20px; background: #0f121c; }
+            .nav-menu a { padding: 12px; }
         }
         .menu-toggle { display: none; }
-        .header {
-            text-align: center;
-            padding: 20px;
-            border-bottom: 1px solid #00d4ff33;
-        }
-        .feed {
-            padding: 20px;
-            max-width: 900px;
-            margin: auto;
-        }
-        .post {
-            background: #12161f;
-            border: 1px solid #00d4ff;
-            border-radius: 16px;
-            margin-bottom: 25px;
-            padding: 18px;
-        }
+        .header { text-align: center; padding: 20px; border-bottom: 1px solid #00d4ff33; }
+        .feed { padding: 20px; max-width: 900px; margin: auto; }
+        .post { background: #12161f; border: 1px solid #00d4ff; border-radius: 16px; margin-bottom: 25px; padding: 18px; }
         .post h3 { color: #00d4ff; margin-bottom: 10px; }
         .post img { max-width: 100%; border-radius: 12px; margin: 12px 0; cursor: pointer; }
         .tipo { font-size: 0.7rem; background: #1e2a3a; display: inline-block; padding: 4px 12px; border-radius: 20px; margin-bottom: 10px; }
@@ -151,6 +65,14 @@
         function toggleMenu() {
             document.querySelector('.nav-menu').classList.toggle('active');
         }
+        // Cerrar menú al hacer clic fuera
+        document.addEventListener('click', function(event) {
+            const menu = document.querySelector('.nav-menu');
+            const toggle = document.querySelector('.menu-toggle');
+            if (menu && toggle && !menu.contains(event.target) && !toggle.contains(event.target)) {
+                menu.classList.remove('active');
+            }
+        });
     </script>
 </head>
 <body>
@@ -174,6 +96,7 @@
     let whatsappNumero = '584240000000';
     let categoriaActivaSlug = 'inicio';
     let intervalCarga;
+    let categoriasData = []; // guardar el árbol para no recargar todo el tiempo
 
     async function cargarConfig() {
         try {
@@ -184,63 +107,69 @@
         } catch(e) {}
     }
 
+    // Construir menú a partir de datos y resaltar categoría activa
+    function construirMenu(categorias, slugActivo) {
+        const navMenu = document.getElementById('navMenu');
+        navMenu.innerHTML = '';
+        categorias.forEach(cat => {
+            const li = document.createElement('li');
+            if (cat.hijos && cat.hijos.length > 0) {
+                li.className = 'dropdown';
+                const a = document.createElement('a');
+                a.textContent = cat.nombre;
+                a.onclick = (e) => { e.preventDefault(); cargarPorCategoria(cat.slug); };
+                if (slugActivo === cat.slug) a.classList.add('activo');
+                li.appendChild(a);
+                const subDiv = document.createElement('div');
+                subDiv.className = 'dropdown-content';
+                cat.hijos.forEach(hijo => {
+                    const subA = document.createElement('a');
+                    subA.textContent = hijo.nombre;
+                    subA.onclick = (e) => { e.preventDefault(); cargarPorCategoria(hijo.slug); };
+                    if (slugActivo === hijo.slug) subA.classList.add('activo');
+                    subDiv.appendChild(subA);
+                });
+                li.appendChild(subDiv);
+            } else {
+                const a = document.createElement('a');
+                a.textContent = cat.nombre;
+                a.onclick = (e) => { e.preventDefault(); cargarPorCategoria(cat.slug); };
+                if (slugActivo === cat.slug) a.classList.add('activo');
+                li.appendChild(a);
+            }
+            navMenu.appendChild(li);
+        });
+        // Admin link
+        fetch('/api/admin/check').then(res => res.json()).then(data => {
+            if (data.logged) {
+                const liAdmin = document.createElement('li');
+                const aAdmin = document.createElement('a');
+                aAdmin.href = '/admin';
+                aAdmin.textContent = '⚙️ Admin';
+                liAdmin.appendChild(aAdmin);
+                navMenu.appendChild(liAdmin);
+            }
+        }).catch(()=>{});
+    }
+
     async function cargarMenu() {
         try {
             const res = await fetch('/api/categorias');
-            const categorias = await res.json();
-            const navMenu = document.getElementById('navMenu');
-            navMenu.innerHTML = '';
-            categorias.forEach(cat => {
-                const li = document.createElement('li');
-                if (cat.hijos && cat.hijos.length > 0) {
-                    li.className = 'dropdown';
-                    const a = document.createElement('a');
-                    a.href = '#';
-                    a.textContent = cat.nombre;
-                    a.onclick = (e) => { e.preventDefault(); cargarPorCategoria(cat.slug); };
-                    if (categoriaActivaSlug === cat.slug) a.classList.add('activo');
-                    li.appendChild(a);
-                    const subDiv = document.createElement('div');
-                    subDiv.className = 'dropdown-content';
-                    cat.hijos.forEach(hijo => {
-                        const subA = document.createElement('a');
-                        subA.href = '#';
-                        subA.textContent = hijo.nombre;
-                        subA.onclick = (e) => { e.preventDefault(); cargarPorCategoria(hijo.slug); };
-                        if (categoriaActivaSlug === hijo.slug) subA.classList.add('activo');
-                        subDiv.appendChild(subA);
-                    });
-                    li.appendChild(subDiv);
-                } else {
-                    const a = document.createElement('a');
-                    a.href = '#';
-                    a.textContent = cat.nombre;
-                    a.onclick = (e) => { e.preventDefault(); cargarPorCategoria(cat.slug); };
-                    if (categoriaActivaSlug === cat.slug) a.classList.add('activo');
-                    li.appendChild(a);
-                }
-                navMenu.appendChild(li);
-            });
-            // Admin link
-            try {
-                const adminCheck = await fetch('/api/admin/check');
-                const adminData = await adminCheck.json();
-                if (adminData.logged) {
-                    const liAdmin = document.createElement('li');
-                    const aAdmin = document.createElement('a');
-                    aAdmin.href = '/admin';
-                    aAdmin.textContent = '⚙️ Admin';
-                    liAdmin.appendChild(aAdmin);
-                    navMenu.appendChild(liAdmin);
-                }
-            } catch(e) {}
+            categoriasData = await res.json();
+            construirMenu(categoriasData, categoriaActivaSlug);
         } catch(e) { console.log(e); }
     }
 
     window.cargarPorCategoria = async function(slug) {
-        localStorage.setItem('acaes_categoria_activa', slug);
+        if (slug === categoriaActivaSlug) return; // ya estamos ahí
         categoriaActivaSlug = slug;
-        await cargarMenu();  // refresca resaltado
+        localStorage.setItem('acaes_categoria_activa', slug);
+        // Actualizar resaltado sin recargar todo el menú
+        document.querySelectorAll('#navMenu a').forEach(a => {
+            const aSlug = a.getAttribute('data-slug');
+            if (aSlug === slug) a.classList.add('activo');
+            else a.classList.remove('activo');
+        });
         document.getElementById('feed').innerHTML = '<div class="loader">Cargando...</div>';
         try {
             const res = await fetch(`/api/posts/categoria/${slug}`);
@@ -352,25 +281,30 @@
 
     // Inicialización
     cargarConfig();
-    cargarMenu();
+    cargarMenu().then(() => {
+        const slugGuardado = localStorage.getItem('acaes_categoria_activa');
+        if (slugGuardado && slugGuardado !== 'null') {
+            cargarPorCategoria(slugGuardado);
+        } else {
+            cargarPosts();
+        }
+    });
     verificarRegistro();
 
-    const slugGuardado = localStorage.getItem('acaes_categoria_activa');
-    if (slugGuardado && slugGuardado !== 'null') cargarPorCategoria(slugGuardado);
-    else cargarPosts();
-
-    // Carga periódica solo si la página está visible (cada 120 segundos)
+    // Recarga periódica solo si la página está visible y no está activa una categoría (o si, pero sin regenerar menú)
     window.addEventListener('load', () => {
         if (intervalCarga) clearInterval(intervalCarga);
         intervalCarga = setInterval(() => {
             if (!document.hidden) {
-                const slug = localStorage.getItem('acaes_categoria_activa');
-                if (slug && slug !== 'null') cargarPorCategoria(slug);
-                else cargarPosts();
+                if (categoriaActivaSlug && categoriaActivaSlug !== 'inicio') {
+                    fetch(`/api/posts/categoria/${categoriaActivaSlug}`).then(r=>r.json()).then(posts => renderizarPosts(posts)).catch(e=>{});
+                } else {
+                    cargarPosts();
+                }
             }
         }, 120000);
     });
     window.addEventListener('beforeunload', () => clearInterval(intervalCarga));
 </script>
 </body>
-    </html>
+</html>
