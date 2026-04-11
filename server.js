@@ -4,7 +4,6 @@ const path = require('path');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const db = require('./database');
 const fs = require('fs');
 
@@ -13,18 +12,12 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-// Configuración de sesión robusta para Render
+// Sesión en memoria (simple, sin SQLite para evitar corrupción)
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', table: 'sessions' }),
   secret: 'acaes_sucre_secret_2024_muy_largo',
-  resave: true,
-  saveUninitialized: true,
-  cookie: { 
-    maxAge: 30 * 24 * 60 * 60 * 1000, 
-    httpOnly: true, 
-    secure: false,      // Render usa HTTPS pero permitimos HTTP también
-    sameSite: 'lax'
-  }
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, secure: false, sameSite: 'lax' }
 }));
 
 // Carpeta de uploads
@@ -48,7 +41,7 @@ const upload = multer({
   }
 });
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
 app.use('/api/', limiter);
 
 // Funciones de configuración
@@ -72,7 +65,8 @@ function notificarAdmin(mensaje) {
     });
   });
 }
-async function broadcastTelegram(mensaje, imagenUrl = null, baseUrl) {
+// Broadcast solo al administrador (sin suscriptores)
+async function broadcastTelegram(mensaje, imagenUrl = null) {
   getBotToken(async (err, botToken) => {
     if (err || !botToken) return;
     getAdminTelegramId(async (err2, adminId) => {
@@ -92,36 +86,13 @@ async function broadcastTelegram(mensaje, imagenUrl = null, baseUrl) {
               parse_mode: 'Markdown'
             });
           }
-        } catch(e) {}
+        } catch(e) { console.error('Error enviando a admin:', e.message); }
       }
-      db.all('SELECT chat_id FROM suscriptores_telegram', async (err3, rows) => {
-        if (rows && rows.length) {
-          for (const row of rows) {
-            try {
-              if (imagenUrl) {
-                await axios.post(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-                  chat_id: row.chat_id,
-                  photo: imagenUrl,
-                  caption: mensaje,
-                  parse_mode: 'Markdown'
-                });
-              } else {
-                await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                  chat_id: row.chat_id,
-                  text: mensaje,
-                  parse_mode: 'Markdown'
-                });
-              }
-            } catch(e) {}
-            await new Promise(r => setTimeout(r, 50));
-          }
-        }
-      });
     });
   });
 }
 
-// Webhook Telegram
+// Webhook Telegram (solo para guardar suscriptores, pero no se usa broadcast)
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   if (update.message && update.message.text === '/start') {
@@ -134,7 +105,7 @@ app.post('/webhook', async (req, res) => {
         [chat_id, username, nombre]);
       axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         chat_id: chat_id,
-        text: '✅ ¡Bienvenido a ACAES! Recibirás todas las novedades astronómicas.'
+        text: '✅ ¡Bienvenido a ACAES! Recibirás las novedades (próximamente).'
       }).catch(e => console.log('Error:', e.message));
       notificarAdmin(`🆕 *NUEVO SUSCRIPTOR*\n\n👤 ${nombre} (@${username})`);
     });
@@ -325,10 +296,8 @@ app.delete('/api/admin/categorias/:id', requireAdmin, (req, res) => {
 app.post('/api/admin/subcategoria', requireAdmin, (req, res) => {
   const { nombre, slug, padre_id } = req.body;
   if (!nombre || !slug || !padre_id) return res.status(400).json({ error: 'Datos incompletos' });
-  // Verificar que la categoría padre existe
   db.get("SELECT id FROM categorias WHERE id = ?", [padre_id], (err, row) => {
     if (err || !row) return res.status(400).json({ error: 'La categoría padre no existe' });
-    // Verificar que el slug no esté duplicado
     db.get("SELECT id FROM categorias WHERE slug = ?", [slug], (err2, row2) => {
       if (row2) return res.status(400).json({ error: 'Ya existe una categoría con ese slug' });
       db.run("INSERT INTO categorias (nombre, slug, padre_id, orden) VALUES (?, ?, ?, (SELECT COALESCE(MAX(orden),0)+1 FROM categorias WHERE padre_id=?))",
@@ -414,12 +383,12 @@ app.post('/api/publicar', requireAdmin, upload.single('archivo'), async (req, re
             if (row) catNombre = row.nombre;
             const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}${catNombre ? `\n📁 Categoría: ${catNombre}` : ''}\n👤 Por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0,300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin || 'https://acaes-sucre.onrender.com'}`;
             const imagenUrl = url_media ? `${req.headers.origin || 'https://acaes-sucre.onrender.com'}${url_media}` : null;
-            broadcastTelegram(mensaje, imagenUrl, req.headers.origin);
+            broadcastTelegram(mensaje, imagenUrl);
           });
         } else {
           const mensaje = `📢 *NUEVA PUBLICACIÓN ACAES*\n\n🚀 *${titulo}*\n📂 Tipo: ${tipo}\n👤 Por: ${userAdmin}${contenido ? `\n\n${contenido.substring(0,300)}` : ''}${enlace_externo ? `\n\n🔗 ${enlace_externo}` : ''}\n\n🌐 ${req.headers.origin || 'https://acaes-sucre.onrender.com'}`;
           const imagenUrl = url_media ? `${req.headers.origin || 'https://acaes-sucre.onrender.com'}${url_media}` : null;
-          broadcastTelegram(mensaje, imagenUrl, req.headers.origin);
+          broadcastTelegram(mensaje, imagenUrl);
         }
       });
     res.json({ success: true, message: 'Publicado' });
