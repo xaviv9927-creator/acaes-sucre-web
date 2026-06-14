@@ -245,7 +245,7 @@ app.post('/api/admin/bot_token', requireAdmin, (req, res) => {
 
 app.post('/api/admin/admin_id', requireAdmin, (req, res) => {
   const { id } = req.body;
-  if (!id || !/^[0-9]+$/.test(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (!id || !/^-?\d+$/.test(id)) return res.status(400).json({ error: 'ID inválido' });
   db.run("REPLACE INTO configuracion (clave, valor) VALUES ('admin_telegram_id', ?)", [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     notificarAdmin(`🆔 *ID ADMIN ACTUALIZADO: ${id}`);
